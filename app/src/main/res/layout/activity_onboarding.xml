@@ -1,0 +1,414 @@
+<?xml version="1.0" encoding="utf-8"?>
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+              android:layout_width="match_parent"
+              android:layout_height="match_parent"
+              android:orientation="vertical"
+              android:background="@color/paper"
+              android:padding="20dp">
+
+    <!-- Barra de Progresso (3 passos) -->
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginTop="8dp">
+
+        <View
+                android:id="@+id/stepBar1"
+                android:layout_width="0dp"
+                android:layout_height="6dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:background="@color/accent" />
+
+        <View
+                android:id="@+id/stepBar2"
+                android:layout_width="0dp"
+                android:layout_height="6dp"
+                android:layout_weight="1"
+                android:layout_marginEnd="6dp"
+                android:background="@color/ink_10" />
+
+        <View
+                android:id="@+id/stepBar3"
+                android:layout_width="0dp"
+                android:layout_height="6dp"
+                android:layout_weight="1"
+                android:background="@color/ink_10" />
+    </LinearLayout>
+
+    <ScrollView
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            android:layout_weight="1"
+            android:layout_marginTop="20dp"
+            android:scrollbars="none">
+
+        <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:orientation="vertical">
+
+            <TextView
+                    android:id="@+id/txtStepIndicator"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="PASSO 1 DE 3 · PERFIL"
+                    android:textColor="@color/accent"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    android:letterSpacing="0.12" />
+
+            <!-- PASSO 0: PERFIL -->
+            <LinearLayout
+                    android:id="@+id/step0Container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp">
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Crie seu perfil"
+                        android:textColor="@color/ink"
+                        android:textSize="28sp"
+                        android:textStyle="bold" />
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="Como podemos te chamar?"
+                        android:textColor="@color/ink"
+                        android:textStyle="bold"
+                        android:textSize="14sp" />
+
+                <EditText
+                        android:id="@+id/edtName"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_card"
+                        android:hint="Seu nome"
+                        android:paddingHorizontal="16dp"
+                        android:textColor="@color/ink"
+                        android:textColorHint="@color/muted"
+                        android:inputType="textPersonName" />
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="Quais vestibulares você vai prestar?"
+                        android:textColor="@color/ink"
+                        android:textStyle="bold"
+                        android:textSize="14sp" />
+
+                <LinearLayout
+                        android:id="@+id/examPickerContainer"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp"
+                        android:orientation="vertical" />
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="Curso desejado (opcional)"
+                        android:textColor="@color/ink"
+                        android:textStyle="bold"
+                        android:textSize="14sp" />
+
+                <EditText
+                        android:id="@+id/edtCourse"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_card"
+                        android:hint="Ex.: Medicina (UEA), Eng. Civil (UFAM)…"
+                        android:paddingHorizontal="16dp"
+                        android:textColor="@color/ink"
+                        android:textColorHint="@color/muted"
+                        android:inputType="textCapSentences" />
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="Sua cidade no Amazonas"
+                        android:textColor="@color/ink"
+                        android:textStyle="bold"
+                        android:textSize="14sp" />
+
+                <Spinner
+                        android:id="@+id/spinnerCity"
+                        android:layout_width="match_parent"
+                        android:layout_height="52dp"
+                        android:layout_marginTop="8dp"
+                        android:background="@drawable/bg_card"
+                        android:paddingHorizontal="12dp" />
+            </LinearLayout>
+
+            <!-- PASSO 1: METODOLOGIA -->
+            <LinearLayout
+                    android:id="@+id/step1Container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone">
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Como você quer estudar?"
+                        android:textColor="@color/ink"
+                        android:textSize="28sp"
+                        android:textStyle="bold" />
+
+                <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp"
+                        android:text="Você poderá mudar isso depois em Configurações."
+                        android:textColor="@color/muted"
+                        android:textSize="14sp" />
+
+                <!-- Card Autônoma -->
+                <LinearLayout
+                        android:id="@+id/cardModeAutonoma"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="20dp">
+
+                    <TextView
+                            android:id="@+id/txtTitleAutonoma"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Autônoma"
+                            android:textColor="@color/ink"
+                            android:textSize="22sp"
+                            android:textStyle="bold" />
+
+                    <TextView
+                            android:id="@+id/txtDescAutonoma"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Você monta seu plano a partir dos editais, define prazos e ritmo. Todos os conteúdos ficam liberados."
+                            android:textColor="@color/muted"
+                            android:textSize="13sp" />
+                </LinearLayout>
+
+                <!-- Card Turma -->
+                <LinearLayout
+                        android:id="@+id/cardModeTurma"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/bg_card"
+                        android:orientation="vertical"
+                        android:padding="20dp">
+
+                    <TextView
+                            android:id="@+id/txtTitleTurma"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Por turma"
+                            android:textColor="@color/ink"
+                            android:textSize="22sp"
+                            android:textStyle="bold" />
+
+                    <TextView
+                            android:id="@+id/txtDescTurma"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            android:text="Organizadores liberam os conteúdos semana a semana e acompanham a turma."
+                            android:textColor="@color/muted"
+                            android:textSize="13sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+            <!-- PASSO 2: RITMO (AUTÔNOMA) OU TURMA -->
+            <LinearLayout
+                    android:id="@+id/step2Container"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical"
+                    android:layout_marginTop="8dp"
+                    android:visibility="gone">
+
+                <!-- Sub-bloco Autônoma -->
+                <LinearLayout
+                        android:id="@+id/subStepAutonoma"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical">
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Quanto tempo você tem?"
+                            android:textColor="@color/ink"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="Seu plano distribui os tópicos dos editais escolhidos em dias. Cada tópico leva de 50 min a 1h."
+                            android:textColor="@color/muted"
+                            android:textSize="14sp" />
+
+                    <TextView
+                            android:id="@+id/txtHoursLabel"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="24dp"
+                            android:text="Horas disponíveis por dia: 3h · ≈ 3 tópicos/dia"
+                            android:textColor="@color/ink"
+                            android:textStyle="bold"
+                            android:textSize="14sp" />
+
+                    <SeekBar
+                            android:id="@+id/seekDailyGoal"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="12dp"
+                            android:max="10"
+                            android:progress="3" />
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:text="Dias de estudo"
+                            android:textColor="@color/ink"
+                            android:textStyle="bold"
+                            android:textSize="14sp" />
+
+                    <LinearLayout
+                            android:id="@+id/daysPickerContainer"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:orientation="horizontal" />
+
+                    <TextView
+                            android:id="@+id/txtWeeklySummary"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:background="@drawable/bg_card"
+                            android:padding="16dp"
+                            android:text="15 tópicos por semana · 15h de estudo."
+                            android:textColor="@color/ink"
+                            android:textSize="14sp" />
+                </LinearLayout>
+
+                <!-- Sub-bloco Turma -->
+                <LinearLayout
+                        android:id="@+id/subStepTurma"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:orientation="vertical"
+                        android:visibility="gone">
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:text="Entre na sua turma"
+                            android:textColor="@color/ink"
+                            android:textSize="28sp"
+                            android:textStyle="bold" />
+
+                    <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="4dp"
+                            android:text="Use o código enviado pelos organizadores."
+                            android:textColor="@color/muted"
+                            android:textSize="14sp" />
+
+                    <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="20dp"
+                            android:orientation="horizontal">
+
+                        <EditText
+                                android:id="@+id/edtTurmaCode"
+                                android:layout_width="0dp"
+                                android:layout_height="50dp"
+                                android:layout_weight="1"
+                                android:background="@drawable/bg_card"
+                                android:hint="CÓDIGO DA TURMA"
+                                android:inputType="textCapCharacters"
+                                android:paddingHorizontal="16dp"
+                                android:textColor="@color/ink" />
+
+                        <Button
+                                android:id="@+id/btnJoinTurma"
+                                android:layout_width="wrap_content"
+                                android:layout_height="50dp"
+                                android:layout_marginStart="8dp"
+                                android:backgroundTint="@color/ink"
+                                android:text="Entrar"
+                                android:textColor="@color/white" />
+                    </LinearLayout>
+
+                    <TextView
+                            android:id="@+id/txtTurmaFeedback"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="8dp"
+                            android:text="Peça o código ao organizador. Para testar, use AM-2025."
+                            android:textColor="@color/muted"
+                            android:textSize="12sp" />
+                </LinearLayout>
+            </LinearLayout>
+
+        </LinearLayout>
+    </ScrollView>
+
+    <!-- Rodapé de Navegação -->
+    <LinearLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:paddingTop="12dp">
+
+        <Button
+                android:id="@+id/btnBack"
+                style="?android:attr/borderlessButtonStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="48dp"
+                android:text="← Voltar"
+                android:textColor="@color/ink"
+                android:visibility="invisible" />
+
+        <View
+                android:layout_width="0dp"
+                android:layout_height="1dp"
+                android:layout_weight="1" />
+
+        <Button
+                android:id="@+id/btnNext"
+                android:layout_width="wrap_content"
+                android:layout_height="52dp"
+                android:backgroundTint="@color/ink"
+                android:paddingHorizontal="24dp"
+                android:text="Continuar →"
+                android:textColor="@color/white"
+                android:textStyle="bold" />
+    </LinearLayout>
+
+</LinearLayout>

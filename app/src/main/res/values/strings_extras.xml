@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Autenticação e Splash -->
+    <string name="splash_tagline">Seu rumo para os vestibulares do Amazonas</string>
+    <string name="login_title">Entrar no FocoVest</string>
+    <string name="login_subtitle">Continue seu plano de estudos, simulados e ranking.</string>
+    <string name="login_btn">Entrar</string>
+    <string name="login_go_register">Ainda não tem conta? Cadastre-se</string>
+    <string name="register_title">Criar conta de aluno</string>
+    <string name="register_subtitle">Prepare-se para PSC, SIS, Macro e ENEM com plano personalizado.</string>
+    <string name="register_teacher_notice">É professor ou coordenador de turma? Gerencie sua turma diretamente pelo modo Organizador no painel de Turmas ou pelo portal web.</string>
+
+    <!-- Módulos complementares -->
+    <string name="nav_calendar">Calendário</string>
+    <string name="nav_forum">Fórum</string>
+    <string name="nav_materials">Materiais</string>
+    <string name="nav_performance">Desempenho</string>
+
+    <!-- Modais -->
+    <string name="dialog_confirm_reset_title">Reiniciar perfil e progresso?</string>
+    <string name="dialog_confirm_reset_message">Todos os tópicos concluídos, anotações, histórico de simulados e flashcards serão apagados deste dispositivo. Essa ação não pode ser desfeita.</string>
+    <string name="dialog_cancel">Cancelar</string>
+    <string name="dialog_confirm">Confirmar</string>
+</resources>

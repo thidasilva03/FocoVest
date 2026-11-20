@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tema Base (index.css) -->
+    <color name="paper">#F4F1EA</color>
+    <color name="card">#FFFDF8</color>
+    <color name="ink">#16181D</color>
+    <color name="ink_05">#0D16181D</color>
+    <color name="ink_10">#1A16181D</color>
+    <color name="muted">#6B6A66</color>
+    <color name="line">#E3DDD0</color>
+    <color name="accent">#FF5A1F</color>
+    <color name="accent_soft">#FFE4D8</color>
+    <color name="lime">#D4F55C</color>
+    <color name="white">#FFFFFF</color>
+    <color name="success">#0E9F6E</color>
+    <color name="success_soft">#D5F3E6</color>
+    <color name="success_dark">#0E6B4B</color>
+    <color name="warning">#F5B400</color>
+
+    <!-- Cores das Disciplinas (data.ts) -->
+    <color name="sub_mat">#FF5A1F</color>
+    <color name="sub_mat_soft">#FFE4D8</color>
+    <color name="sub_fis">#2F5BFF</color>
+    <color name="sub_fis_soft">#DDE5FF</color>
+    <color name="sub_qui">#0E9F6E</color>
+    <color name="sub_qui_soft">#D5F3E6</color>
+    <color name="sub_bio">#8B5CF6</color>
+    <color name="sub_bio_soft">#EBE2FF</color>
+    <color name="sub_his">#C2410C</color>
+    <color name="sub_his_soft">#F8E3D2</color>
+    <color name="sub_geo">#0F766E</color>
+    <color name="sub_geo_soft">#D3F1EC</color>
+    <color name="sub_por">#DB2777</color>
+    <color name="sub_por_soft">#FBDCEB</color>
+</resources>
