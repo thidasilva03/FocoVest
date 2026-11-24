@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- IDs idênticos aos destinos do nav_graph.xml -->
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item
+        android:id="@+id/dashboardFragment"
+        android:icon="@drawable/ic_nav_painel"
+        android:title="Painel" />
+    <item
+        android:id="@+id/studyRoomFragment"
+        android:icon="@drawable/ic_nav_estudo"
+        android:title="Estudar" />
+    <item
+        android:id="@+id/planFragment"
+        android:icon="@drawable/ic_nav_plano"
+        android:title="Planos" />
+    <item
+        android:id="@+id/simuladosFragment"
+        android:icon="@drawable/ic_nav_simulados"
+        android:title="Simulados" />
+</menu>

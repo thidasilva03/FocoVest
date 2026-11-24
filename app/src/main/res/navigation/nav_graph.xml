@@ -1,0 +1,75 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Mapa de navegação da MainActivity.
+    Os IDs dos destinos de aba coincidem com os IDs de res/menu/bottom_nav_menu.xml,
+    o que permite ao NavigationUI sincronizar automaticamente a BottomNavigationView.
+-->
+<navigation xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:id="@+id/nav_graph"
+    app:startDestination="@id/dashboardFragment">
+
+    <fragment
+        android:id="@+id/dashboardFragment"
+        android:name="com.example.focovest.ui.fragment.DashboardFragment"
+        android:label="Painel"
+        tools:layout="@layout/fragment_dashboard" />
+
+    <fragment
+        android:id="@+id/studyRoomFragment"
+        android:name="com.example.focovest.ui.fragment.StudyRoomFragment"
+        android:label="Estudar"
+        tools:layout="@layout/fragment_study_room">
+        <!-- Tópico a abrir; se nulo, usa o último tópico estudado pelo usuário -->
+        <argument
+            android:name="topicId"
+            android:defaultValue="@null"
+            app:argType="string"
+            app:nullable="true" />
+    </fragment>
+
+    <fragment
+        android:id="@+id/planFragment"
+        android:name="com.example.focovest.ui.fragment.PlanFragment"
+        android:label="Planos" />
+
+    <fragment
+        android:id="@+id/simuladosFragment"
+        android:name="com.example.focovest.ui.fragment.SimuladosFragment"
+        android:label="Simulados" />
+
+    <fragment
+        android:id="@+id/settingsFragment"
+        android:name="com.example.focovest.ui.fragment.SettingsFragment"
+        android:label="Configurações" />
+
+    <!--
+        Ações globais: podem ser disparadas de qualquer tela.
+        popUpTo = Painel mantém a regra "Voltar sempre retorna ao Painel e depois sai do app".
+    -->
+    <action
+        android:id="@+id/action_global_study"
+        app:destination="@id/studyRoomFragment"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/dashboardFragment" />
+
+    <action
+        android:id="@+id/action_global_plan"
+        app:destination="@id/planFragment"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/dashboardFragment" />
+
+    <action
+        android:id="@+id/action_global_simulados"
+        app:destination="@id/simuladosFragment"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/dashboardFragment" />
+
+    <action
+        android:id="@+id/action_global_settings"
+        app:destination="@id/settingsFragment"
+        app:launchSingleTop="true"
+        app:popUpTo="@id/dashboardFragment" />
+
+</navigation>

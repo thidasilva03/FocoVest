@@ -1,0 +1,88 @@
+Atue como um engenheiro Android sênior e execute uma refatoração completa no projeto **FocoVest** (`com.example.focovest`) para transformá-lo em um MVP enxuto, estável, 100% **offline-first com SQLite embutido** e pronto para uso imediatamente após o build — sem nenhuma dependência de servidor próprio ou infraestrutura externa.
+
+### Restrições técnicas obrigatórias
+- **Linguagem e UI:** Mantenha o projeto estritamente em **Java** com **layouts XML** e a identidade visual atual (`res/values/colors.xml` e `res/drawable/`). Não converta arquivos para Kotlin nem utilize Jetpack Compose.
+- **Zero infraestrutura externa:** Remova qualquer dependência de API remota. A única utilização de internet permitida no app é a reprodução de videoaulas do YouTube dentro do `WebView` (`<uses-permission android:name="android.permission.INTERNET" />`).
+- **Persistência nativa:** Utilize `SQLiteOpenHelper` nativo do Android (sem adicionar Room/KSP/Hilt) para evitar conflitos de compilação no Gradle 9.x e garantir zero configuração adicional.
+
+---
+
+### Fase 1 — Corte de escopo e higiene do repositório
+Antes de criar o banco, remova tudo o que não pertence aos 5 requisitos mínimos do MVP:
+
+1. **Excluir telas e diálogos fora do escopo:**
+   - `ui/fragment/ForumFragment.java`
+   - `ui/dialog/NewForumQuestionDialogFragment.java`
+   - `ui/fragment/CalendarFragment.java`
+   - `ui/fragment/MaterialsHubFragment.java`
+   - `ui/dialog/FlashcardViewerDialogFragment.java`
+   - `ui/fragment/PerformanceHistoryFragment.java`
+   - `ui/fragment/PlaceholderFragment.java`
+2. **Excluir layouts, recursos e camadas de dados extras:**
+   - `res/layout/fragment_calendar.xml`, `res/layout/dialog_flashcard_viewer.xml`, `res/layout/dialog_new_question.xml`, `res/values/strings_extras.xml` (e remova `res/xml/file_paths.xml` ou drawables não referenciados).
+   - `data/ExtrasRepository.java`, `data/ExtrasStoreManager.java`.
+   - `data/remote/ApiClient.java`, `data/remote/ApiCallback.java` e `res/xml/network_security_config.xml` (remova também a referência `android:networkSecurityConfig` no `AndroidManifest.xml`).
+   - Modelos não usados: `AccessHistoryItem.java`, `BookItem.java`, `ExamEvent.java`, `FlashcardItem.java`, `ForumQuestion.java`, `ForumReply.java`, `PastExam.java`, `ReadingText.java`.
+3. **Remover o modo "Por turma / Organizador":**
+   - Elimine a escolha de metodologia (`autonoma` vs `turma`), mural de avisos, bloqueio de semanas e controles de organizador em `OnboardingActivity`, `PlanFragment`, `SettingsFragment`, `DashboardFragment`, `MainActivity` e seus respectivos XMLs.
+   - Enxugue o menu de navegação da `MainActivity` para conter exclusivamente: **Painel**, **Estudar**, **Planos**, **Simulados**, **Ranking** e **Configurações**.
+4. **Limpar anomalias do repositório:**
+   - Remova as pastas e arquivos duplicados `app/.idea/`, `app/.gradle/` e `app/local.properties`.
+   - Garanta no `.gitignore` da raiz que `.gradle/`, `.idea/`, `build/` e `local.properties` estejam ignorados.
+
+---
+
+### Fase 2 — Arquitetura offline-first com SQLite embutido
+Substitua a persistência global em JSON (`StoreManager`) por um banco SQLite local que nasce populado automaticamente na primeira execução:
+
+1. **Criar `FocoVestDbHelper` (`SQLiteOpenHelper`) e DAOs/Repository locais em `data/`** com as seguintes tabelas:
+   - `users`: `id` (PK), `email` (UNIQUE), `password_hash`, `name`, `city`, `target_course`, `target_exams` (CSV de `ENEM,PSC,SIS,Macro`), `daily_hours`, `study_days`, `profile_completed` (0/1), `last_topic_id`.
+   - `topics`: `id` (PK), `subject`, `title`, `summary`, `minutes`, `default_video_url`, `weight_enem`, `weight_psc`, `weight_sis`, `weight_macro`.
+   - `questions`: `id` (PK), `topic_id` (FK), `subject`, `prompt`, `option_a`, `option_b`, `option_c`, `option_d`, `option_e`, `correct_index`, `explanation`.
+   - `user_topic_progress`: `user_id` (FK), `topic_id` (FK), `completed` (0/1), `completed_at`, `stage` (`aula` | `exercicios` | `diagnostico`), `notes`, `custom_video_url` — chave primária composta `(user_id, topic_id)`.
+   - `user_question_answers`: `user_id` (FK), `question_id` (FK), `selected_index` — chave primária composta `(user_id, question_id)`.
+   - `simulado_history`: `id` (PK), `user_id` (FK), `exam_filter`, `title`, `correct_count`, `total_count`, `duration_sec`, `created_at`, `answers_json`, `question_ids_json`.
+   - `friend_groups`: `id` (PK), `name`, `invite_code` (UNIQUE), `created_by_user_id`.
+   - `group_members`: `id` (PK), `group_id` (FK), `user_id` (nullable FK para contas reais locais), `display_name`, `city`, `points`, `streak`, `is_external_import` (0/1).
+2. **Seed automático no `onCreate` do banco:**
+   - Popule todos os tópicos do edital com **URLs válidas de videoaulas do YouTube** em `default_video_url` e cadastre **pelo menos 3 questões reais com justificativa para cada tópico** (não deixe nenhum tópico com 0 questões).
+   - Crie 1 conta de demonstração opcional e 1 grupo de amigos inicial (ex.: código `AM-2026`) com alguns colegas pré-populados para validação imediata.
+3. **Isolamento de sessão (`AuthSessionManager`):**
+   - Armazene no `SharedPreferences` apenas o `logged_user_id`.
+   - Todas as consultas, escritas, estatísticas e progressos devem ser filtrados por `logged_user_id` para suportar múltiplas contas no mesmo aparelho sem mistura de dados.
+   - Aposente o `StoreManager` antigo e remova arquivos obsoletos após migrar todas as referências.
+
+---
+
+### Fase 3 — Adequação aos 5 requisitos mínimos do MVP
+Garanta que cada tela atenda integralmente às regras abaixo:
+
+1. **Conta e progresso salvo (`SplashActivity`, `LoginActivity`, `RegisterActivity`, `OnboardingActivity`, `SettingsFragment`, `DashboardFragment`):**
+   - Cadastro salva o usuário no SQLite com hash seguro de senha (`SHA-256` com salt ou `PBKDF2`), inicia sessão e direciona para o Onboarding simplificado (objetivos + ritmo de estudo).
+   - Login valida contra a tabela `users` e restaura todo o progresso salvo daquele usuário.
+   - Em Configurações, permitir editar perfil/objetivos, alterar ritmo de estudo, encerrar sessão (logout) e reiniciar progresso apenas do usuário logado.
+2. **Plano de estudos dedicado por objetivo (`PlanEngine`, `PlanFragment`):**
+   - Remova a fusão de provas em um único plano genérico.
+   - Para cada objetivo escolhido pelo aluno (`ENEM`, `PSC`, `SIS` e/ou `Macro`), gere e exiba um **plano dedicado e independente** (com abas ou seletor direto no topo do `PlanFragment`), calculado pelo `PlanEngine` usando exclusivamente a coluna de incidência daquela prova (`weight_*`).
+   - Tópicos concluídos em uma prova devem refletir o status concluído do aluno sem quebrar a organização específica de cada edital.
+3. **Sala de Estudos (`StudyRoomFragment`, `VideoEmbedHelper`):**
+   - Carregue automaticamente `custom_video_url` (se definido) ou `default_video_url` no `WebView` interno vinculado ao YouTube, mantendo a opção de o aluno colar/trocar o link.
+   - Mantenha a tela do player de vídeo (**Aula**) separada da tela de **Exercícios / Diagnóstico**.
+   - Garanta que o editor de **Anotações** esteja disponível em ambas as telas, lendo e salvando em tempo real na tabela `user_topic_progress` para o `(user_id, topic_id)` atual.
+4. **Simulados baseados nos tópicos concluídos (`SimuladosFragment`):**
+   - Substitua os simulados de questões fixas por geração dinâmica baseada **exclusivamente nos tópicos marcados como concluídos (`completed = 1`)** pelo usuário logado.
+   - Permita gerar o simulado filtrando por "Todos os tópicos concluídos" ou por um dos objetivos selecionados pelo aluno (ex.: apenas concluídos do `PSC`), mantendo cronômetro regressivo, cartão-resposta, revisão e gabarito comentado salvos em `simulado_history`.
+   - Caso o aluno ainda não tenha concluído nenhum tópico, exiba um estado vazio claro com botão de atalho para o plano de estudos.
+5. **Ranking entre amigos estilo GymRats (`RankingFragment`):**
+   - Substitua a lista estática de 30 perfis fictícios do Amazonas por um sistema de **Grupos de Amigos** apoiado em `friend_groups` e `group_members`.
+   - Permita criar um grupo (gerando código de convite), entrar em um grupo existente por código e visualizar o pódio + tabela do grupo ordenados pela pontuação calculada do usuário (`+10` fixação, `+30` tópico concluído, `+15` simulado).
+   - Recalcule e sincronize automaticamente a pontuação de contas reais criadas no mesmo aparelho dentro dos grupos em que participam.
+   - Adicione uma opção offline de **Compartilhar / Importar Placar** (gerar um código curto copiável como `FOCO:Nome:Pontos:Streak` e um campo para colar o código de um amigo e atualizar a pontuação dele no grupo) para permitir competição entre celulares diferentes sem servidor.
+
+---
+
+### Fase 4 — Estabilização e verificação de build
+1. Limpe dependências não usadas em `app/build.gradle.kts` e verifique avisos de deprecação do Gradle 9.x.
+2. Revise `AndroidManifest.xml` para garantir que apenas Activities existentes estejam registradas e que `SplashActivity` seja o ponto de entrada (`MAIN`/`LAUNCHER`).
+3. Execute o build completo (`./gradlew assembleDebug` ou equivalente) e corrija todos os erros de compilação, imports quebrados e referências XML até o build finalizar com sucesso.
+4. Ao final, entregue um resumo objetivo listando os arquivos removidos, os arquivos criados/alterados e o resultado do build.

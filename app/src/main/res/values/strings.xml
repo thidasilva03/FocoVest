@@ -1,3 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">FocoVest</string>
+
+    <!-- Diálogos -->
+    <string name="dialog_confirm_reset_title">Reiniciar seu progresso?</string>
+    <string name="dialog_confirm_reset_message">Todos os tópicos concluídos, respostas, anotações e histórico de simulados salvos neste aparelho serão apagados. Suas preferências de estudo serão mantidas.</string>
+    <string name="dialog_cancel">Cancelar</string>
+    <string name="dialog_confirm">Confirmar</string>
 </resources>

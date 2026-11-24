@@ -1,70 +1,101 @@
 package com.example.focovest.ui.fragment;
 
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
-import android.view.*;
-import android.widget.*;
+import android.os.SystemClock;
+import android.view.Gravity;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.widget.HorizontalScrollView;
+import android.widget.LinearLayout;
+import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+import androidx.navigation.fragment.NavHostFragment;
+
 import com.example.focovest.R;
-import com.example.focovest.data.DataRepository;
-import com.example.focovest.data.DataRepository.*;
-import com.example.focovest.data.StoreManager;
-import com.example.focovest.data.StoreManager.SimuladoResult;
-import com.example.focovest.domain.PlanEngine;
+import com.example.focovest.data.FocoVestRepository;
+import com.example.focovest.model.ExamId;
+import com.example.focovest.model.Question;
+import com.example.focovest.model.SimuladoHistoryItem;
+import com.example.focovest.model.Topic;
+import com.example.focovest.model.User;
+import com.google.android.material.button.MaterialButton;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
+import java.util.UUID;
 
+/**
+ * Simulados gerados dinamicamente com base EXCLUSIVA nos tópicos concluídos (completed = 1)
+ * pelo usuário logado, com filtro por objetivo, cronômetro preciso, cartão-resposta e gabarito comentado.
+ */
 public class SimuladosFragment extends Fragment {
 
     private static final String[] LETTERS = {"A", "B", "C", "D", "E"};
-    private StoreManager store;
+
+    private FocoVestRepository repo;
+    private String userId;
     private LinearLayout root;
 
-    // Estado de navegação interna: "list" | "runner" | "result" | "editor"
-    private String mode = "list";
-    private Simulado runningSim = null;
-    private SimuladoResult currentResult = null;
+    // Navegação interna: "home" | "runner" | "result"
+    private String mode = "home";
+    private String selectedExamFilter = "ALL"; // "ALL" ou ExamId.id
 
     // Estado do Runner
+    private String runningTitle = "";
+    private String runningExamFilter = "ALL";
+    private int runningDurationTotalSec = 600;
+    private long runnerStartElapsedMs = 0L;
+    private List<Question> runningQuestions = new ArrayList<>();
     private int currentIdx = 0;
     private final Map<String, Integer> runnerAnswers = new HashMap<>();
     private final Set<String> flaggedQuestions = new HashSet<>();
-    private int elapsedSec = 0;
     private TextView txtTimerView;
+
+    // Resultado aberto
+    private SimuladoHistoryItem currentResult = null;
+
     private final Handler timerHandler = new Handler(Looper.getMainLooper());
     private final Runnable timerRunnable = new Runnable() {
         @Override
         public void run() {
-            if (!"runner".equals(mode) || runningSim == null) return;
-            elapsedSec++;
-            int remaining = Math.max(0, runningSim.minutes * 60 - elapsedSec);
+            if (!"runner".equals(mode) || runningQuestions.isEmpty()) return;
+            int elapsed = getElapsedSeconds();
+            int remaining = Math.max(0, runningDurationTotalSec - elapsed);
             if (txtTimerView != null) {
                 txtTimerView.setText("⏱ " + formatSec(remaining));
             }
             if (remaining <= 0) {
                 finishRunner();
             } else {
-                timerHandler.postDelayed(this, 1000);
+                timerHandler.postDelayed(this, 500);
             }
         }
     };
 
-    // Estado do Editor de Simulado Personalizado
-    private String editorName = "";
-    private int editorMinutes = 20;
-    private final List<String> editorTopicIds = new ArrayList<>();
-
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_scroll_container, container, false);
         root = v.findViewById(R.id.rootContainer);
-        store = StoreManager.getInstance(requireContext());
+        repo = FocoVestRepository.getInstance(requireContext());
+        userId = FocoVestRepository.LOCAL_USER_ID;
         render();
         return v;
     }
@@ -73,6 +104,12 @@ public class SimuladosFragment extends Fragment {
     public void onDestroyView() {
         super.onDestroyView();
         timerHandler.removeCallbacks(timerRunnable);
+        txtTimerView = null;
+    }
+
+    private int getElapsedSeconds() {
+        if (runnerStartElapsedMs <= 0L) return 0;
+        return (int) Math.max(0L, (SystemClock.elapsedRealtime() - runnerStartElapsedMs) / 1000L);
     }
 
     private static String formatSec(int s) {
@@ -88,180 +125,290 @@ public class SimuladosFragment extends Fragment {
             case "result":
                 renderResult();
                 break;
-            case "editor":
-                renderEditor();
-                break;
             default:
-                renderList();
+                renderHome();
                 break;
         }
     }
 
-    // --- 1. LISTAGEM DE SIMULADOS ---
-    private void renderList() {
-        StoreManager.State state = store.getState();
-        boolean autonomous = "autonoma".equals(state.mode);
+    // =========================================================================
+    // 1. TELA INICIAL: GERADOR DINÂMICO + HISTÓRICO
+    // =========================================================================
 
-        TextView eyebrow = new TextView(requireContext());
-        eyebrow.setText("SIMULADOS");
-        eyebrow.setTextColor(getColorRes(R.color.accent));
-        eyebrow.setTypeface(null, Typeface.BOLD);
-        eyebrow.setTextSize(11f);
-        root.addView(eyebrow);
+    private void renderHome() {
+        User user = repo.getUserById(userId);
+        if (user == null) return;
 
-        TextView title = new TextView(requireContext());
-        title.setText("Treine no ritmo da prova real.");
-        title.setTextColor(getColorRes(R.color.ink));
-        title.setTypeface(null, Typeface.BOLD);
-        title.setTextSize(26f);
-        title.setPadding(0, 4, 0, 16);
-        root.addView(title);
+        addEyebrow("SIMULADOS DINÂMICOS");
+        addTitle("Treine no que você já estudou.");
 
-        if (autonomous) {
-            Button btnCreate = new Button(requireContext());
-            btnCreate.setText("+ Criar simulado personalizado");
-            btnCreate.setAllCaps(false);
-            btnCreate.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColorRes(R.color.ink)));
-            btnCreate.setTextColor(Color.WHITE);
-            btnCreate.setOnClickListener(v -> {
-                editorName = "";
-                editorMinutes = 20;
-                editorTopicIds.clear();
-                mode = "editor";
-                render();
-            });
-            root.addView(btnCreate);
+        List<Topic> allCompleted = repo.getCompletedTopics(userId, null);
 
-            for (Simulado custom : state.customSimulados) {
-                addSimuladoCard(custom, false);
+        // Estado vazio claro caso o aluno ainda não tenha concluído nenhum tópico
+        if (allCompleted.isEmpty()) {
+            LinearLayout emptyCard = createCard(true);
+
+            TextView tvTitle = new TextView(requireContext());
+            tvTitle.setText("Nenhum tópico concluído ainda");
+            tvTitle.setTextColor(getColorRes(R.color.lime));
+            tvTitle.setTextSize(20f);
+            tvTitle.setTypeface(null, Typeface.BOLD);
+            emptyCard.addView(tvTitle);
+
+            TextView tvDesc = new TextView(requireContext());
+            tvDesc.setText("Seus simulados são montados dinamicamente com questões exclusivas dos tópicos que você já marcou como concluídos na Sala de Estudos.\n\nConclua seu primeiro tópico no plano para desbloquear os simulados!");
+            tvDesc.setTextColor(Color.parseColor("#CCFFFFFF"));
+            tvDesc.setTextSize(13f);
+            tvDesc.setPadding(0, dp(8), 0, dp(16));
+            emptyCard.addView(tvDesc);
+
+            MaterialButton btnGoPlan = new MaterialButton(requireContext());
+            btnGoPlan.setText("Ir para meus planos de estudo →");
+            btnGoPlan.setAllCaps(false);
+            btnGoPlan.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.lime)));
+            btnGoPlan.setTextColor(getColorRes(R.color.ink));
+            btnGoPlan.setTypeface(null, Typeface.BOLD);
+            btnGoPlan.setOnClickListener(v -> NavHostFragment.findNavController(this)
+                .navigate(R.id.action_global_plan));
+            emptyCard.addView(btnGoPlan);
+
+            root.addView(emptyCard);
+            renderHistorySection();
+            return;
+        }
+
+        // Filtro por objetivo (Todos os concluídos ou um objetivo selecionado pelo aluno)
+        if (!"ALL".equals(selectedExamFilter)) {
+            ExamId parsed = ExamId.fromCode(selectedExamFilter);
+            if (parsed == null || !user.targetExams.contains(parsed)) {
+                selectedExamFilter = "ALL";
             }
         }
 
-        TextView secOfficial = new TextView(requireContext());
-        secOfficial.setText("Simulados por vestibular");
-        secOfficial.setTypeface(null, Typeface.BOLD);
-        secOfficial.setTextSize(20f);
-        secOfficial.setTextColor(getColorRes(R.color.ink));
-        secOfficial.setPadding(0, 24, 0, 12);
-        root.addView(secOfficial);
+        LinearLayout filterCard = createCard(false);
+        TextView tvFilterLabel = new TextView(requireContext());
+        tvFilterLabel.setText("Filtrar simulado pelos tópicos concluídos:");
+        tvFilterLabel.setTypeface(null, Typeface.BOLD);
+        tvFilterLabel.setTextColor(getColorRes(R.color.ink));
+        tvFilterLabel.setPadding(0, 0, 0, dp(10));
+        filterCard.addView(tvFilterLabel);
 
-        for (int i = 0; i < DataRepository.SIMULADOS.size(); i++) {
-            addSimuladoCard(DataRepository.SIMULADOS.get(i), i == 0);
+        HorizontalScrollView hsv = new HorizontalScrollView(requireContext());
+        hsv.setScrollBarSize(0);
+        LinearLayout chipRow = new LinearLayout(requireContext());
+        chipRow.setOrientation(LinearLayout.HORIZONTAL);
+
+        chipRow.addView(createFilterChip("Todos concluídos", "ALL".equals(selectedExamFilter), () -> {
+            selectedExamFilter = "ALL";
+            render();
+        }));
+        for (ExamId ex : user.targetExams) {
+            chipRow.addView(createFilterChip(user.getExamLabel(ex), ex.id.equals(selectedExamFilter), () -> {
+                selectedExamFilter = ex.id;
+                render();
+            }));
         }
+        hsv.addView(chipRow);
+        filterCard.addView(hsv);
+        root.addView(filterCard);
 
-        // Histórico
+        ExamId examFilterObj = "ALL".equals(selectedExamFilter) ? null : ExamId.fromCode(selectedExamFilter);
+        String examFilterLabel = examFilterObj == null ? "Geral" : user.getExamLabel(examFilterObj);
+        List<Topic> matchingTopics = repo.getCompletedTopics(userId, examFilterObj, user.highSchoolYear);
+        List<Question> pool = repo.getQuestionsForCompletedTopics(userId, examFilterObj, user.highSchoolYear);
+
+        // Card de geração do simulado
+        LinearLayout genCard = createCard(true);
+        String scopeLabel = examFilterObj == null ? "Todos os tópicos concluídos" : "Concluídos do " + examFilterLabel;
+
+        TextView tvBadge = new TextView(requireContext());
+        tvBadge.setText(scopeLabel.toUpperCase(Locale.ROOT));
+        tvBadge.setTextColor(getColorRes(R.color.lime));
+        tvBadge.setTextSize(11f);
+        tvBadge.setTypeface(null, Typeface.BOLD);
+        genCard.addView(tvBadge);
+
+        if (pool.isEmpty()) {
+            TextView tvNone = new TextView(requireContext());
+            tvNone.setText("Você ainda não concluiu tópicos do edital " + examFilterLabel + ".");
+            tvNone.setTextColor(Color.WHITE);
+            tvNone.setTextSize(16f);
+            tvNone.setTypeface(null, Typeface.BOLD);
+            tvNone.setPadding(0, dp(8), 0, dp(12));
+            genCard.addView(tvNone);
+
+            MaterialButton btnGoPlan = new MaterialButton(requireContext());
+            btnGoPlan.setText("Abrir plano " + examFilterLabel + " →");
+            btnGoPlan.setAllCaps(false);
+            btnGoPlan.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.accent)));
+            btnGoPlan.setTextColor(Color.WHITE);
+            btnGoPlan.setOnClickListener(v -> NavHostFragment.findNavController(this)
+                .navigate(R.id.action_global_plan));
+            genCard.addView(btnGoPlan);
+        } else {
+            int maxQuestions = Math.min(pool.size(), 12);
+            int minutes = Math.max(5, maxQuestions * 3);
+
+            TextView tvGenTitle = new TextView(requireContext());
+            tvGenTitle.setText("Simulado " + examFilterLabel);
+            tvGenTitle.setTextColor(Color.WHITE);
+            tvGenTitle.setTextSize(22f);
+            tvGenTitle.setTypeface(null, Typeface.BOLD);
+            tvGenTitle.setPadding(0, dp(4), 0, dp(4));
+            genCard.addView(tvGenTitle);
+
+            TextView tvMeta = new TextView(requireContext());
+            tvMeta.setText(matchingTopics.size() + " tópico(s) concluído(s) · " + maxQuestions
+                    + " questões sorteadas (de " + pool.size() + " disponíveis) · " + minutes + " min");
+            tvMeta.setTextColor(Color.parseColor("#B3FFFFFF"));
+            tvMeta.setTextSize(13f);
+            tvMeta.setPadding(0, 0, 0, dp(14));
+            genCard.addView(tvMeta);
+
+            MaterialButton btnStart = new MaterialButton(requireContext());
+            btnStart.setText("Iniciar simulado agora →");
+            btnStart.setAllCaps(false);
+            btnStart.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.accent)));
+            btnStart.setTextColor(Color.WHITE);
+            btnStart.setTypeface(null, Typeface.BOLD);
+            btnStart.setOnClickListener(v -> startDynamicSimulado(
+                    examFilterObj == null ? "ALL" : examFilterObj.id,
+                    "Simulado · " + (examFilterObj == null ? "Concluídos" : examFilterLabel),
+                    pool, maxQuestions, minutes));
+            genCard.addView(btnStart);
+        }
+        root.addView(genCard);
+
+        renderHistorySection();
+    }
+
+    private void renderHistorySection() {
+        List<SimuladoHistoryItem> history = repo.getSimuladoHistory(userId);
+
         TextView secHist = new TextView(requireContext());
-        secHist.setText("Histórico recente");
+        secHist.setText("Histórico de simulados");
         secHist.setTypeface(null, Typeface.BOLD);
         secHist.setTextSize(20f);
         secHist.setTextColor(getColorRes(R.color.ink));
-        secHist.setPadding(0, 24, 0, 12);
+        secHist.setPadding(0, dp(8), 0, dp(10));
         root.addView(secHist);
 
-        if (state.history.isEmpty()) {
+        if (history.isEmpty()) {
             LinearLayout empty = createCard(false);
             TextView tv = new TextView(requireContext());
-            tv.setText("Você ainda não fez nenhum simulado.");
+            tv.setText("Você ainda não concluiu nenhum simulado.");
             tv.setTextColor(getColorRes(R.color.muted));
             empty.addView(tv);
             root.addView(empty);
-        } else {
-            for (int i = 0; i < Math.min(8, state.history.size()); i++) {
-                SimuladoResult h = state.history.get(i);
-                int pct = Math.round((h.correct * 100f) / Math.max(1, h.total));
-                LinearLayout row = createCard(false);
-                TextView tv = new TextView(requireContext());
-                tv.setText((h.simExam != null ? h.simExam : "Simulado") + " · " + h.simName
-                        + "\n" + pct + "% (" + h.correct + "/" + h.total + ") · Tempo: " + formatSec(h.durationSec));
-                tv.setTypeface(null, Typeface.BOLD);
-                tv.setTextColor(getColorRes(R.color.ink));
-                row.addView(tv);
-                row.setOnClickListener(v -> {
-                    currentResult = h;
-                    mode = "result";
-                    render();
-                });
-                root.addView(row);
-            }
+            return;
+        }
+
+        for (SimuladoHistoryItem h : history) {
+            int pct = Math.round((h.correctCount * 100f) / Math.max(1, h.totalCount));
+            LinearLayout row = createCard(false);
+
+            TextView tvTop = new TextView(requireContext());
+            String badge = "ALL".equals(h.examFilter) ? "Geral" : h.examFilter;
+            tvTop.setText(badge + " · " + h.title);
+            tvTop.setTypeface(null, Typeface.BOLD);
+            tvTop.setTextColor(getColorRes(R.color.ink));
+            tvTop.setTextSize(15f);
+
+            TextView tvSub = new TextView(requireContext());
+            tvSub.setText(pct + "% (" + h.correctCount + "/" + h.totalCount + " acertos) · Tempo: "
+                    + formatSec(h.durationSec) + " · " + h.createdAt);
+            tvSub.setTextColor(getColorRes(R.color.muted));
+            tvSub.setTextSize(12f);
+            tvSub.setPadding(0, dp(4), 0, 0);
+
+            row.addView(tvTop);
+            row.addView(tvSub);
+            row.setOnClickListener(v -> {
+                currentResult = h;
+                mode = "result";
+                render();
+            });
+            root.addView(row);
         }
     }
 
-    private void addSimuladoCard(Simulado sim, boolean dark) {
-        LinearLayout card = createCard(dark);
-
-        TextView badge = new TextView(requireContext());
-        badge.setText(sim.exam + " · " + sim.questionIds.size() + " questões · " + sim.minutes + " min");
-        badge.setTextColor(dark ? getColorRes(R.color.lime) : getColorRes(R.color.accent));
-        badge.setTypeface(null, Typeface.BOLD);
-        badge.setTextSize(12f);
-        card.addView(badge);
-
-        TextView name = new TextView(requireContext());
-        name.setText(sim.name);
-        name.setTextColor(dark ? Color.WHITE : getColorRes(R.color.ink));
-        name.setTypeface(null, Typeface.BOLD);
-        name.setTextSize(22f);
-        name.setPadding(0, 6, 0, 4);
-        card.addView(name);
-
-        TextView desc = new TextView(requireContext());
-        desc.setText(sim.description);
-        desc.setTextColor(dark ? Color.parseColor("#B3FFFFFF") : getColorRes(R.color.muted));
-        desc.setTextSize(13f);
-        card.addView(desc);
-
-        Button btnStart = new Button(requireContext());
-        btnStart.setText("Iniciar simulado →");
-        btnStart.setAllCaps(false);
-        btnStart.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                getColorRes(dark ? R.color.accent : R.color.ink)));
-        btnStart.setTextColor(Color.WHITE);
-        btnStart.setOnClickListener(v -> startSimulado(sim));
-        card.addView(btnStart);
-
-        root.addView(card);
+    private View createFilterChip(String label, boolean active, Runnable onClick) {
+        TextView tv = new TextView(requireContext());
+        tv.setText((active ? "✓ " : "") + label);
+        tv.setPadding(dp(14), dp(9), dp(14), dp(9));
+        LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
+                LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+        lp.setMargins(0, 0, dp(8), 0);
+        tv.setLayoutParams(lp);
+        tv.setBackgroundResource(active ? R.drawable.bg_card_dark : R.drawable.bg_input);
+        tv.setTextColor(active ? getColorRes(R.color.lime) : getColorRes(R.color.ink));
+        tv.setTypeface(null, Typeface.BOLD);
+        tv.setTextSize(13f);
+        tv.setOnClickListener(v -> onClick.run());
+        return tv;
     }
 
-    // --- 2. RUNNER DE PROVA COM CRONÓMETRO ---
-    private void startSimulado(Simulado sim) {
-        this.runningSim = sim;
+    // =========================================================================
+    // 2. RUNNER COM CRONÔMETRO PRECISO E CARTÃO-RESPOSTA
+    // =========================================================================
+
+    private void startDynamicSimulado(String examFilter, String title,
+                                      List<Question> pool, int count, int minutes) {
+        List<Question> shuffled = new ArrayList<>(pool);
+        Collections.shuffle(shuffled);
+        this.runningQuestions = new ArrayList<>(shuffled.subList(0, Math.min(count, shuffled.size())));
+        if (this.runningQuestions.isEmpty()) {
+            Toast.makeText(requireContext(), "Nenhuma questão disponível para o filtro.", Toast.LENGTH_SHORT).show();
+            return;
+        }
+
+        this.runningExamFilter = examFilter;
+        this.runningTitle = title;
+        this.runningDurationTotalSec = minutes * 60;
+        this.runnerStartElapsedMs = SystemClock.elapsedRealtime();
         this.currentIdx = 0;
         this.runnerAnswers.clear();
         this.flaggedQuestions.clear();
-        this.elapsedSec = 0;
         this.mode = "runner";
+
         timerHandler.removeCallbacks(timerRunnable);
-        timerHandler.postDelayed(timerRunnable, 1000);
+        timerHandler.postDelayed(timerRunnable, 500);
         render();
     }
 
     private void renderRunner() {
-        List<Question> questions = new ArrayList<>();
-        for (String qid : runningSim.questionIds) {
-            Question q = DataRepository.findQuestionById(qid);
-            if (q != null) questions.add(q);
+        if (runningQuestions.isEmpty()) {
+            mode = "home";
+            render();
+            return;
         }
-        Question q = questions.get(currentIdx);
-        int remaining = Math.max(0, runningSim.minutes * 60 - elapsedSec);
+        if (currentIdx < 0 || currentIdx >= runningQuestions.size()) {
+            currentIdx = 0;
+        }
 
-        // Barra topo: Sair + Cronómetro
+        Question q = runningQuestions.get(currentIdx);
+        int remaining = Math.max(0, runningDurationTotalSec - getElapsedSeconds());
+
+        // Barra topo: Sair + Cronômetro regressivo
         LinearLayout topRow = new LinearLayout(requireContext());
         topRow.setOrientation(LinearLayout.HORIZONTAL);
         topRow.setGravity(Gravity.CENTER_VERTICAL);
-        topRow.setPadding(0, 0, 0, 16);
+        topRow.setPadding(0, 0, 0, dp(12));
 
-        Button btnCancel = new Button(requireContext());
+        MaterialButton btnCancel = new MaterialButton(requireContext());
         btnCancel.setText("← Sair");
         btnCancel.setAllCaps(false);
+        btnCancel.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.ink)));
+        btnCancel.setTextColor(Color.WHITE);
         btnCancel.setOnClickListener(v -> {
             timerHandler.removeCallbacks(timerRunnable);
-            mode = "list";
+            mode = "home";
             render();
         });
 
         txtTimerView = new TextView(requireContext());
         txtTimerView.setText("⏱ " + formatSec(remaining));
-        txtTimerView.setPadding(32, 16, 32, 16);
+        txtTimerView.setPadding(dp(14), dp(8), dp(14), dp(8));
         txtTimerView.setBackgroundResource(R.drawable.bg_card_dark);
         txtTimerView.setTextColor(getColorRes(R.color.lime));
         txtTimerView.setTypeface(null, Typeface.BOLD);
@@ -278,14 +425,18 @@ public class SimuladosFragment extends Fragment {
         boolean isFlagged = flaggedQuestions.contains(q.id);
 
         TextView tvHeader = new TextView(requireContext());
-        tvHeader.setText(String.format(Locale.US, "Questão %02d/%02d · %s", currentIdx + 1, questions.size(), q.subject.name));
+        tvHeader.setText(String.format(Locale.US, "Questão %02d/%02d · %s",
+                currentIdx + 1, runningQuestions.size(), q.subject.name));
         tvHeader.setTextColor(q.subject.getColorInt());
         tvHeader.setTypeface(null, Typeface.BOLD);
         qCard.addView(tvHeader);
 
-        Button btnFlag = new Button(requireContext());
+        MaterialButton btnFlag = new MaterialButton(requireContext());
         btnFlag.setText(isFlagged ? "★ Marcada p/ revisão" : "☆ Revisar depois");
         btnFlag.setAllCaps(false);
+        btnFlag.setBackgroundTintList(ColorStateList.valueOf(
+                getColorRes(isFlagged ? R.color.accent : R.color.ink_10)));
+        btnFlag.setTextColor(isFlagged ? Color.WHITE : getColorRes(R.color.ink));
         btnFlag.setOnClickListener(v -> {
             if (isFlagged) flaggedQuestions.remove(q.id);
             else flaggedQuestions.add(q.id);
@@ -295,10 +446,10 @@ public class SimuladosFragment extends Fragment {
 
         TextView tvPrompt = new TextView(requireContext());
         tvPrompt.setText(q.prompt);
-        tvPrompt.setTextSize(17f);
+        tvPrompt.setTextSize(16f);
         tvPrompt.setTypeface(null, Typeface.BOLD);
         tvPrompt.setTextColor(getColorRes(R.color.ink));
-        tvPrompt.setPadding(0, 16, 0, 16);
+        tvPrompt.setPadding(0, dp(10), 0, dp(10));
         qCard.addView(tvPrompt);
 
         Integer chosen = runnerAnswers.get(q.id);
@@ -307,10 +458,10 @@ public class SimuladosFragment extends Fragment {
             boolean sel = chosen != null && chosen == i;
             TextView opt = new TextView(requireContext());
             opt.setText(LETTERS[i] + ")  " + q.options.get(i));
-            opt.setPadding(32, 26, 32, 26);
+            opt.setPadding(dp(14), dp(12), dp(14), dp(12));
             LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            olp.setMargins(0, 12, 0, 0);
+            olp.setMargins(0, dp(8), 0, 0);
             opt.setLayoutParams(olp);
             opt.setBackgroundResource(sel ? R.drawable.bg_card_dark : R.drawable.bg_input);
             opt.setTextColor(sel ? Color.WHITE : getColorRes(R.color.ink));
@@ -321,29 +472,36 @@ public class SimuladosFragment extends Fragment {
             qCard.addView(opt);
         }
 
-        // Navegação Anterior / Próxima / Finalizar
+        // Navegação Anterior / Próxima / Entregar
         LinearLayout navRow = new LinearLayout(requireContext());
         navRow.setOrientation(LinearLayout.HORIZONTAL);
-        navRow.setPadding(0, 24, 0, 0);
+        navRow.setPadding(0, dp(16), 0, 0);
 
-        Button btnPrev = new Button(requireContext());
+        MaterialButton btnPrev = new MaterialButton(requireContext());
         btnPrev.setText("← Anterior");
+        btnPrev.setAllCaps(false);
+        btnPrev.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.ink_10)));
+        btnPrev.setTextColor(getColorRes(R.color.ink));
         btnPrev.setEnabled(currentIdx > 0);
+        btnPrev.setAlpha(currentIdx > 0 ? 1f : 0.4f);
         btnPrev.setOnClickListener(v -> {
             currentIdx--;
             render();
         });
 
-        Button btnNext = new Button(requireContext());
-        if (currentIdx < questions.size() - 1) {
+        MaterialButton btnNext = new MaterialButton(requireContext());
+        btnNext.setAllCaps(false);
+        if (currentIdx < runningQuestions.size() - 1) {
             btnNext.setText("Próxima →");
+            btnNext.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.ink)));
+            btnNext.setTextColor(Color.WHITE);
             btnNext.setOnClickListener(v -> {
                 currentIdx++;
                 render();
             });
         } else {
             btnNext.setText("Entregar simulado ✓");
-            btnNext.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColorRes(R.color.accent)));
+            btnNext.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.accent)));
             btnNext.setTextColor(Color.WHITE);
             btnNext.setOnClickListener(v -> finishRunner());
         }
@@ -356,29 +514,48 @@ public class SimuladosFragment extends Fragment {
         qCard.addView(navRow);
         root.addView(qCard);
 
-        // Cartão-Resposta Rápido
+        // Cartão-Resposta
         LinearLayout gridCard = createCard(false);
         TextView tvGrid = new TextView(requireContext());
-        tvGrid.setText("Cartão-resposta (" + runnerAnswers.size() + "/" + questions.size() + " respondidas)");
+        tvGrid.setText("Cartão-resposta (" + runnerAnswers.size() + "/" + runningQuestions.size() + " respondidas)");
         tvGrid.setTypeface(null, Typeface.BOLD);
+        tvGrid.setTextColor(getColorRes(R.color.ink));
         gridCard.addView(tvGrid);
 
         HorizontalScrollView hsv = new HorizontalScrollView(requireContext());
         LinearLayout chips = new LinearLayout(requireContext());
         chips.setOrientation(LinearLayout.HORIZONTAL);
-        chips.setPadding(0, 16, 0, 0);
+        chips.setPadding(0, dp(10), 0, 0);
 
-        for (int i = 0; i < questions.size(); i++) {
+        for (int i = 0; i < runningQuestions.size(); i++) {
             final int qIndex = i;
-            Question qq = questions.get(i);
+            Question qq = runningQuestions.get(i);
             Integer ans = runnerAnswers.get(qq.id);
-            Button b = new Button(requireContext());
-            b.setText((i + 1) + (ans != null ? ":" + LETTERS[ans] : ""));
-            b.setOnClickListener(v -> {
+            boolean flag = flaggedQuestions.contains(qq.id);
+
+            TextView chip = new TextView(requireContext());
+            chip.setText((flag ? "★" : "") + (i + 1) + (ans != null ? ":" + LETTERS[ans] : ""));
+            chip.setPadding(dp(12), dp(8), dp(12), dp(8));
+            chip.setTypeface(null, Typeface.BOLD);
+            LinearLayout.LayoutParams clp = new LinearLayout.LayoutParams(
+                    LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT);
+            clp.setMargins(0, 0, dp(6), 0);
+            chip.setLayoutParams(clp);
+            if (i == currentIdx) {
+                chip.setBackgroundResource(R.drawable.bg_button_accent);
+                chip.setTextColor(Color.WHITE);
+            } else if (ans != null) {
+                chip.setBackgroundResource(R.drawable.bg_card_dark);
+                chip.setTextColor(getColorRes(R.color.lime));
+            } else {
+                chip.setBackgroundResource(R.drawable.bg_input);
+                chip.setTextColor(getColorRes(R.color.ink));
+            }
+            chip.setOnClickListener(v -> {
                 currentIdx = qIndex;
                 render();
             });
-            chips.addView(b);
+            chips.addView(chip);
         }
         hsv.addView(chips);
         gridCard.addView(hsv);
@@ -387,66 +564,84 @@ public class SimuladosFragment extends Fragment {
 
     private void finishRunner() {
         timerHandler.removeCallbacks(timerRunnable);
-        List<Question> questions = new ArrayList<>();
-        for (String qid : runningSim.questionIds) {
-            Question q = DataRepository.findQuestionById(qid);
-            if (q != null) questions.add(q);
+        if (runningQuestions.isEmpty()) {
+            mode = "home";
+            render();
+            return;
         }
+
         int correct = 0;
-        for (Question q : questions) {
-            Integer a = runnerAnswers.get(q.id);
-            if (a != null && a == q.answer) correct++;
+        List<String> qIds = new ArrayList<>();
+        for (Question q : runningQuestions) {
+            qIds.add(q.id);
+            Integer chosen = runnerAnswers.get(q.id);
+            if (chosen != null && chosen == q.correctIndex) correct++;
         }
 
-        SimuladoResult res = new SimuladoResult();
-        res.id = UUID.randomUUID().toString();
-        res.simuladoId = runningSim.id;
-        res.correct = correct;
-        res.total = questions.size();
-        res.date = PlanEngine.dayKey(new Date());
-        res.durationSec = Math.min(elapsedSec, runningSim.minutes * 60);
-        res.answers = new HashMap<>(runnerAnswers);
-        res.questionIds = new ArrayList<>(runningSim.questionIds);
-        res.simName = runningSim.name;
-        res.simExam = runningSim.exam;
+        int durationSec = Math.min(getElapsedSeconds(), runningDurationTotalSec);
+        SimuladoHistoryItem item = new SimuladoHistoryItem(
+                "sim-" + UUID.randomUUID().toString().substring(0, 8),
+                userId,
+                runningExamFilter,
+                runningTitle,
+                correct,
+                runningQuestions.size(),
+                durationSec,
+                FocoVestRepository.nowTimestamp(),
+                new HashMap<>(runnerAnswers),
+                qIds
+        );
 
-        store.getState().history.add(0, res);
-        store.save();
+        repo.saveSimuladoResult(item);
 
-        this.currentResult = res;
-        this.runningSim = null;
+        this.currentResult = item;
+        this.runningQuestions = new ArrayList<>();
         this.mode = "result";
         render();
     }
 
-    // --- 3. RESULTADO E GABARITO COMENTADO ---
+    // =========================================================================
+    // 3. RESULTADO E GABARITO COMENTADO
+    // =========================================================================
+
     private void renderResult() {
-        Button btnBack = new Button(requireContext());
+        if (currentResult == null) {
+            mode = "home";
+            render();
+            return;
+        }
+
+        MaterialButton btnBack = new MaterialButton(requireContext());
         btnBack.setText("← Voltar aos simulados");
         btnBack.setAllCaps(false);
+        btnBack.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.ink)));
+        btnBack.setTextColor(Color.WHITE);
         btnBack.setOnClickListener(v -> {
-            mode = "list";
+            mode = "home";
             render();
         });
         root.addView(btnBack);
 
-        int pct = Math.round((currentResult.correct * 100f) / Math.max(1, currentResult.total));
+        int pct = Math.round((currentResult.correctCount * 100f) / Math.max(1, currentResult.totalCount));
         LinearLayout scoreCard = createCard(true);
 
+        String badge = "ALL".equals(currentResult.examFilter) ? "Geral" : currentResult.examFilter;
         TextView tvTitle = new TextView(requireContext());
-        tvTitle.setText(currentResult.simExam + " · " + currentResult.simName);
+        tvTitle.setText(badge + " · " + currentResult.title);
         tvTitle.setTextColor(Color.parseColor("#99FFFFFF"));
         scoreCard.addView(tvTitle);
 
         TextView tvScore = new TextView(requireContext());
-        tvScore.setText(pct + "% (" + currentResult.correct + "/" + currentResult.total + " acertos)");
+        tvScore.setText(pct + "% (" + currentResult.correctCount + "/" + currentResult.totalCount + " acertos)");
         tvScore.setTextColor(getColorRes(R.color.lime));
-        tvScore.setTextSize(32f);
+        tvScore.setTextSize(30f);
         tvScore.setTypeface(null, Typeface.BOLD);
         scoreCard.addView(tvScore);
 
         TextView tvPts = new TextView(requireContext());
-        tvPts.setText("Tempo: " + formatSec(currentResult.durationSec) + "   ·   +" + (currentResult.correct * 15) + " pontos no ranking");
+        tvPts.setText("Tempo: " + formatSec(currentResult.durationSec)
+                + "  ·  +" + (currentResult.correctCount * FocoVestRepository.POINTS_PER_SIMULADO_CORRECT)
+                + " pontos");
         tvPts.setTextColor(Color.WHITE);
         scoreCard.addView(tvPts);
         root.addView(scoreCard);
@@ -456,14 +651,14 @@ public class SimuladosFragment extends Fragment {
         tvGab.setTypeface(null, Typeface.BOLD);
         tvGab.setTextSize(20f);
         tvGab.setTextColor(getColorRes(R.color.ink));
-        tvGab.setPadding(0, 16, 0, 12);
+        tvGab.setPadding(0, dp(8), 0, dp(10));
         root.addView(tvGab);
 
         for (int i = 0; i < currentResult.questionIds.size(); i++) {
-            Question q = DataRepository.findQuestionById(currentResult.questionIds.get(i));
+            Question q = repo.getQuestionById(currentResult.questionIds.get(i));
             if (q == null) continue;
             Integer chosen = currentResult.answers.get(q.id);
-            boolean ok = chosen != null && chosen == q.answer;
+            boolean ok = chosen != null && chosen == q.correctIndex;
 
             LinearLayout c = createCard(false);
             TextView p = new TextView(requireContext());
@@ -472,11 +667,13 @@ public class SimuladosFragment extends Fragment {
             p.setTextColor(getColorRes(ok ? R.color.success_dark : R.color.ink));
             c.addView(p);
 
-            String myAns = chosen != null ? LETTERS[chosen] + ") " + q.options.get(chosen) : "em branco";
-            String rightAns = LETTERS[q.answer] + ") " + q.options.get(q.answer);
+            String myAns = (chosen != null && chosen >= 0 && chosen < q.options.size())
+                    ? LETTERS[chosen] + ") " + q.options.get(chosen)
+                    : "em branco";
+            String rightAns = LETTERS[q.correctIndex] + ") " + q.options.get(q.correctIndex);
             TextView ans = new TextView(requireContext());
             ans.setText("Sua resposta: " + myAns + (ok ? "" : "\nCorreta: " + rightAns));
-            ans.setPadding(0, 8, 0, 8);
+            ans.setPadding(0, dp(6), 0, dp(6));
             ans.setTextColor(getColorRes(R.color.ink));
             c.addView(ans);
 
@@ -488,81 +685,32 @@ public class SimuladosFragment extends Fragment {
         }
     }
 
-    // --- 4. EDITOR DE SIMULADO PERSONALIZADO (SimuladoEditor.tsx) ---
-    private void renderEditor() {
-        Button btnBack = new Button(requireContext());
-        btnBack.setText("← Cancelar");
-        btnBack.setAllCaps(false);
-        btnBack.setOnClickListener(v -> {
-            mode = "list";
-            render();
-        });
-        root.addView(btnBack);
+    private void addEyebrow(String text) {
+        TextView tv = new TextView(requireContext());
+        tv.setText(text);
+        tv.setTextColor(getColorRes(R.color.accent));
+        tv.setTypeface(null, Typeface.BOLD);
+        tv.setTextSize(11f);
+        root.addView(tv);
+    }
 
-        LinearLayout card = createCard(false);
-        EditText edtName = new EditText(requireContext());
-        edtName.setHint("Nome do simulado (Ex.: Revisão Exatas PSC)");
-        edtName.setText(editorName);
-        edtName.setBackgroundResource(R.drawable.bg_input);
-        edtName.setPadding(28, 22, 28, 22);
-        card.addView(edtName);
-
-        TextView tvSub = new TextView(requireContext());
-        tvSub.setText("Escolha os tópicos com banco de questões:");
-        tvSub.setTypeface(null, Typeface.BOLD);
-        tvSub.setPadding(0, 20, 0, 8);
-        card.addView(tvSub);
-
-        for (Topic t : DataRepository.TOPICS) {
-            if (t.questions.isEmpty()) continue;
-            CheckBox cb = new CheckBox(requireContext());
-            cb.setText(t.subject.name + " · " + t.title + " (" + t.questions.size() + " questões)");
-            cb.setChecked(editorTopicIds.contains(t.id));
-            cb.setOnCheckedChangeListener((b, checked) -> {
-                editorName = edtName.getText().toString();
-                if (checked) {
-                    if (!editorTopicIds.contains(t.id)) editorTopicIds.add(t.id);
-                } else {
-                    editorTopicIds.remove(t.id);
-                }
-            });
-            card.addView(cb);
-        }
-
-        Button btnSave = new Button(requireContext());
-        btnSave.setText("Criar simulado");
-        btnSave.setBackgroundTintList(android.content.res.ColorStateList.valueOf(getColorRes(R.color.accent)));
-        btnSave.setTextColor(Color.WHITE);
-        btnSave.setOnClickListener(v -> {
-            String name = edtName.getText().toString().trim();
-            if (name.isEmpty() || editorTopicIds.isEmpty()) {
-                Toast.makeText(requireContext(), "Dê um nome e selecione ao menos 1 tópico.", Toast.LENGTH_SHORT).show();
-                return;
-            }
-            List<String> qIds = new ArrayList<>();
-            for (String tid : editorTopicIds) {
-                Topic t = DataRepository.findTopicById(tid);
-                for (Question q : t.questions) qIds.add(q.id);
-            }
-            Simulado custom = new Simulado("custom-" + UUID.randomUUID().toString().substring(0, 6),
-                    name, "Meu simulado", editorTopicIds.size() + " tópico(s) selecionado(s)",
-                    editorMinutes, qIds, new ArrayList<>(editorTopicIds), true);
-            store.getState().customSimulados.add(0, custom);
-            store.save();
-            mode = "list";
-            render();
-        });
-        card.addView(btnSave);
-        root.addView(card);
+    private void addTitle(String text) {
+        TextView tv = new TextView(requireContext());
+        tv.setText(text);
+        tv.setTextColor(getColorRes(R.color.ink));
+        tv.setTypeface(null, Typeface.BOLD);
+        tv.setTextSize(26f);
+        tv.setPadding(0, dp(2), 0, dp(12));
+        root.addView(tv);
     }
 
     private LinearLayout createCard(boolean dark) {
         LinearLayout card = new LinearLayout(requireContext());
         card.setOrientation(LinearLayout.VERTICAL);
-        card.setPadding(36, 32, 36, 32);
+        card.setPadding(dp(18), dp(16), dp(18), dp(16));
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        lp.setMargins(0, 0, 0, 20);
+        lp.setMargins(0, 0, 0, dp(14));
         card.setLayoutParams(lp);
         card.setBackgroundResource(dark ? R.drawable.bg_card_dark : R.drawable.bg_card);
         return card;
@@ -570,5 +718,9 @@ public class SimuladosFragment extends Fragment {
 
     private int getColorRes(int res) {
         return getResources().getColor(res, requireContext().getTheme());
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }

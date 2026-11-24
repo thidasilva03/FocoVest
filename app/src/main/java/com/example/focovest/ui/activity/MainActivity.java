@@ -1,153 +1,85 @@
 package com.example.focovest.ui.activity;
 
 import android.content.Intent;
-import android.graphics.Color;
 import android.os.Bundle;
+import android.view.Menu;
 import android.widget.TextView;
-import androidx.activity.OnBackPressedCallback;
-import androidx.appcompat.app.AppCompatActivity;
-import androidx.fragment.app.Fragment;
-import com.example.focovest.*;
-import com.example.focovest.data.StoreManager;
-import com.example.focovest.ui.fragment.*;
 
+import androidx.appcompat.app.AppCompatActivity;
+import androidx.navigation.NavController;
+import androidx.navigation.fragment.NavHostFragment;
+import androidx.navigation.ui.NavigationUI;
+
+import com.example.focovest.R;
+import com.example.focovest.data.FocoVestRepository;
+import com.example.focovest.model.User;
+import com.example.focovest.util.EdgeToEdgeHelper;
+import com.google.android.material.bottomnavigation.BottomNavigationView;
+
+/**
+ * Activity principal do MVP: Painel, Estudar, Planos, Simulados e Configurações.
+ * A troca de telas é feita pelo Navigation Component (res/navigation/nav_graph.xml).
+ */
 public class MainActivity extends AppCompatActivity {
 
-    private String currentView = "painel";
-    private String selectedTopicId = null;
-
-    private TextView navPainel, navEstudo, navPlano, navSimulados, navRanking;
-    private TextView btnHeaderCalendar, btnHeaderMaterials, btnHeaderForum, btnHeaderPerformance, btnHeaderConfig;
+    private NavController navController;
+    private BottomNavigationView bottomNav;
+    private TextView btnHeaderConfig;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
+        EdgeToEdgeHelper.enable(this, true);
         super.onCreate(savedInstanceState);
 
-        StoreManager store = StoreManager.getInstance(this);
-        if (!store.getState().profileCreated) {
-            startActivity(new Intent(this, OnboardingActivity.class));
+        FocoVestRepository repo = FocoVestRepository.getInstance(this);
+        User user = repo.getOrCreateLocalUser();
+
+        if (!user.profileCompleted) {
+            startActivity(new Intent(this, WelcomeActivity.class));
             finish();
             return;
         }
 
         setContentView(R.layout.activity_main);
+        EdgeToEdgeHelper.applySystemBarInsets(findViewById(R.id.mainRoot), true);
 
-        navPainel = findViewById(R.id.navPainel);
-        navEstudo = findViewById(R.id.navEstudo);
-        navPlano = findViewById(R.id.navPlano);
-        navSimulados = findViewById(R.id.navSimulados);
-        navRanking = findViewById(R.id.navRanking);
-        btnHeaderCalendar = findViewById(R.id.btnHeaderCalendar);
-        btnHeaderMaterials = findViewById(R.id.btnHeaderMaterials);
-        btnHeaderForum = findViewById(R.id.btnHeaderForum);
-        btnHeaderPerformance = findViewById(R.id.btnHeaderPerformance);
+        NavHostFragment navHostFragment = (NavHostFragment) getSupportFragmentManager()
+                .findFragmentById(R.id.navHostFragment);
+        if (navHostFragment == null) return;
+        navController = navHostFragment.getNavController();
+
+        bottomNav = findViewById(R.id.bottomNav);
+        bottomNav.setItemActiveIndicatorEnabled(false);
+        // Sincroniza abas <-> destinos e cuida do botão Voltar (sempre retorna ao Painel antes de sair)
+        NavigationUI.setupWithNavController(bottomNav, navController);
+
         btnHeaderConfig = findViewById(R.id.btnHeaderConfig);
+        btnHeaderConfig.setOnClickListener(v -> navController.navigate(R.id.action_global_settings));
 
-        navPainel.setOnClickListener(v -> navigateTo("painel"));
-        navEstudo.setOnClickListener(v -> navigateTo("estudo"));
-        navPlano.setOnClickListener(v -> navigateTo("plano"));
-        navSimulados.setOnClickListener(v -> navigateTo("simulados"));
-        navRanking.setOnClickListener(v -> navigateTo("ranking"));
-        btnHeaderCalendar.setOnClickListener(v -> navigateTo("calendario"));
-        btnHeaderMaterials.setOnClickListener(v -> navigateTo("materiais"));
-        btnHeaderForum.setOnClickListener(v -> navigateTo("forum"));
-        btnHeaderPerformance.setOnClickListener(v -> navigateTo("desempenho"));
-        btnHeaderConfig.setOnClickListener(v -> navigateTo("config"));
-
-        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
-            @Override
-            public void handleOnBackPressed() {
-                if (!"painel".equals(currentView)) {
-                    navigateTo("painel");
-                } else {
-                    setEnabled(false);
-                    getOnBackPressedDispatcher().onBackPressed();
-                }
+        navController.addOnDestinationChangedListener((controller, destination, arguments) -> {
+            boolean configActive = destination.getId() == R.id.settingsFragment;
+            updateHeaderConfigHighlight(configActive);
+            if (configActive) {
+                clearBottomNavSelection();
             }
         });
-
-        navigateTo("painel");
     }
 
-    public void openTopic(String topicId) {
-        this.selectedTopicId = topicId;
-        StoreManager.getInstance(this).getState().lastTopic = topicId;
-        StoreManager.getInstance(this).save();
-        navigateTo("estudo");
-    }
-
-    public String getSelectedTopicId() {
-        return selectedTopicId;
-    }
-
-    public void navigateTo(String view) {
-        this.currentView = view;
-        StoreManager store = StoreManager.getInstance(this);
-        navPlano.setText("turma".equals(store.getState().mode) ? "Minha turma" : "Meu plano");
-
-        updateNavHighlight();
-
-        Fragment fragment;
-        switch (view) {
-            case "painel":
-                fragment = new DashboardFragment();
-                break;
-            case "estudo":
-                fragment = new StudyRoomFragment();
-                break;
-            case "plano":
-                fragment = new PlanFragment();
-                break;
-            case "simulados":
-                fragment = new SimuladosFragment();
-                break;
-            case "ranking":
-                fragment = new RankingFragment();
-                break;
-            case "calendario":
-                fragment = new CalendarFragment();
-                break;
-            case "materiais":
-                fragment = new MaterialsHubFragment();
-                break;
-            case "forum":
-                fragment = new ForumFragment();
-                break;
-            case "desempenho":
-                fragment = new PerformanceHistoryFragment();
-                break;
-            case "config":
-            default:
-                fragment = new SettingsFragment();
-                break;
-        }
-
-        getSupportFragmentManager()
-                .beginTransaction()
-                .replace(R.id.fragmentContainer, fragment)
-                .commit();
-    }
-
-    private void updateNavHighlight() {
+    /** Destaca o botão ⚙ do topo quando a tela de Configurações está aberta. */
+    private void updateHeaderConfigHighlight(boolean active) {
         int lime = getResources().getColor(R.color.lime, getTheme());
         int ink = getResources().getColor(R.color.ink, getTheme());
-        int inactive = Color.parseColor("#99FFFFFF");
-
-        navPainel.setTextColor("painel".equals(currentView) ? lime : inactive);
-        navEstudo.setTextColor("estudo".equals(currentView) ? lime : inactive);
-        navPlano.setTextColor("plano".equals(currentView) ? lime : inactive);
-        navSimulados.setTextColor("simulados".equals(currentView) ? lime : inactive);
-        navRanking.setTextColor("ranking".equals(currentView) ? lime : inactive);
-
-        styleHeaderButton(btnHeaderCalendar, "calendario".equals(currentView), lime, ink);
-        styleHeaderButton(btnHeaderMaterials, "materiais".equals(currentView), lime, ink);
-        styleHeaderButton(btnHeaderForum, "forum".equals(currentView), lime, ink);
-        styleHeaderButton(btnHeaderPerformance, "desempenho".equals(currentView), lime, ink);
-        styleHeaderButton(btnHeaderConfig, "config".equals(currentView), lime, ink);
+        btnHeaderConfig.setBackgroundResource(active ? R.drawable.bg_card_dark : R.drawable.bg_card);
+        btnHeaderConfig.setTextColor(active ? lime : ink);
     }
 
-    private void styleHeaderButton(TextView btn, boolean active, int lime, int ink) {
-        btn.setBackgroundResource(active ? R.drawable.bg_card_dark : R.drawable.bg_card);
-        btn.setTextColor(active ? lime : ink);
+    /** Configurações não é uma aba: nenhuma aba deve aparecer selecionada. */
+    private void clearBottomNavSelection() {
+        Menu menu = bottomNav.getMenu();
+        menu.setGroupCheckable(0, true, false);
+        for (int i = 0; i < menu.size(); i++) {
+            menu.getItem(i).setChecked(false);
+        }
+        menu.setGroupCheckable(0, true, true);
     }
 }

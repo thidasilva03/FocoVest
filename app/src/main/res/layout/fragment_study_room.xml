@@ -1,556 +1,520 @@
 <?xml version="1.0" encoding="utf-8"?>
 <ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-            android:layout_width="match_parent"
-            android:layout_height="match_parent"
-            android:background="@color/paper"
-            android:scrollbars="none">
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/paper"
+    android:scrollbars="none">
 
     <LinearLayout
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="vertical"
-            android:padding="16dp">
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical"
+        android:padding="16dp">
 
-        <!-- Seletor de Tópico e Botão "Próximo do plano" (TopicSwitcher) -->
+        <!-- Seletor de Tópico e Botão "Próximo do plano" -->
         <Spinner
-                android:id="@+id/spinnerTopicSwitcher"
-                android:layout_width="match_parent"
-                android:layout_height="48dp"
-                android:background="@drawable/bg_card"
-                android:paddingHorizontal="12dp" />
+            android:id="@+id/spinnerTopicSwitcher"
+            android:layout_width="match_parent"
+            android:layout_height="48dp"
+            android:background="@drawable/bg_card"
+            android:paddingHorizontal="12dp" />
 
         <TextView
-                android:id="@+id/btnNextInPlan"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="8dp"
-                android:paddingVertical="4dp"
-                android:text="Próximo do plano: Probabilidade →"
-                android:textColor="@color/accent"
-                android:textSize="13sp"
-                android:textStyle="bold" />
+            android:id="@+id/btnNextInPlan"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:paddingVertical="4dp"
+            android:text="Próximo do plano →"
+            android:textColor="@color/accent"
+            android:textSize="13sp"
+            android:textStyle="bold" />
 
         <!-- Cabeçalho do Tópico + Stepper de Fases -->
         <LinearLayout
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                android:background="@drawable/bg_card"
-                android:orientation="vertical"
-                android:padding="16dp">
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:background="@drawable/bg_card"
+            android:orientation="vertical"
+            android:padding="16dp">
 
             <LinearLayout
-                    android:layout_width="match_parent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/txtSubjectBadge"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="3dp"
+                    android:text="Matemática"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
                 <TextView
-                        android:id="@+id/txtSubjectBadge"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:paddingHorizontal="10dp"
-                        android:paddingVertical="3dp"
-                        android:text="Matemática"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
-
-                <TextView
-                        android:id="@+id/txtTopicMinutes"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="10dp"
-                        android:text="~60 min"
-                        android:textColor="@color/muted"
-                        android:textSize="12sp" />
+                    android:id="@+id/txtTopicMinutes"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="10dp"
+                    android:text="~60 min"
+                    android:textColor="@color/muted"
+                    android:textSize="12sp" />
             </LinearLayout>
 
             <TextView
-                    android:id="@+id/txtTopicTitle"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:text="Função do 2º grau"
-                    android:textColor="@color/ink"
-                    android:textSize="22sp"
-                    android:textStyle="bold" />
+                android:id="@+id/txtTopicTitle"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:text="Função do 2º grau"
+                android:textColor="@color/ink"
+                android:textSize="22sp"
+                android:textStyle="bold" />
 
             <TextView
-                    android:id="@+id/txtTopicSummary"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="2dp"
-                    android:text="Vértice, raízes, concavidade e problemas de máximo e mínimo."
-                    android:textColor="@color/muted"
-                    android:textSize="13sp" />
+                android:id="@+id/txtTopicSummary"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:text="Vértice, raízes, concavidade e problemas de máximo e mínimo."
+                android:textColor="@color/muted"
+                android:textSize="13sp" />
 
             <!-- Indicador das 3 Fases -->
             <LinearLayout
-                    android:layout_width="match_parent"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="14dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal">
+
+                <TextView
+                    android:id="@+id/stepPillAula"
+                    android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal">
-
-                <TextView
-                        android:id="@+id/stepPillAula"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:paddingHorizontal="10dp"
-                        android:paddingVertical="4dp"
-                        android:text="1 · Aula"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="1 · Aula"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
                 <View
-                        android:layout_width="12dp"
-                        android:layout_height="1dp"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@color/line" />
+                    android:layout_width="12dp"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@color/line" />
 
                 <TextView
-                        android:id="@+id/stepPillExercicios"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:paddingHorizontal="10dp"
-                        android:paddingVertical="4dp"
-                        android:text="2 · Exercícios"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+                    android:id="@+id/stepPillExercicios"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="2 · Exercícios"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
 
                 <View
-                        android:layout_width="12dp"
-                        android:layout_height="1dp"
-                        android:layout_marginHorizontal="4dp"
-                        android:background="@color/line" />
+                    android:layout_width="12dp"
+                    android:layout_height="1dp"
+                    android:layout_marginHorizontal="4dp"
+                    android:background="@color/line" />
 
                 <TextView
-                        android:id="@+id/stepPillDiagnostico"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:paddingHorizontal="10dp"
-                        android:paddingVertical="4dp"
-                        android:text="3 · Diagnóstico"
-                        android:textSize="11sp"
-                        android:textStyle="bold" />
+                    android:id="@+id/stepPillDiagnostico"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:paddingHorizontal="10dp"
+                    android:paddingVertical="4dp"
+                    android:text="3 · Diagnóstico"
+                    android:textSize="11sp"
+                    android:textStyle="bold" />
             </LinearLayout>
 
             <!-- Botões de ação da fase no topo -->
             <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
-                    android:orientation="horizontal">
-
-                <Button
-                        android:id="@+id/btnHeaderSecondary"
-                        style="?android:attr/borderlessButtonStyle"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:layout_marginEnd="8dp"
-                        android:text="← Aula"
-                        android:textColor="@color/ink"
-                        android:visibility="gone" />
-
-                <Button
-                        android:id="@+id/btnHeaderPrimary"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:backgroundTint="@color/accent"
-                        android:text="Responder exercícios →"
-                        android:textColor="@color/white"
-                        android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- ABA DE CONSULTA RÁPIDA (Visível nas fases Exercícios e Diagnóstico) -->
-        <LinearLayout
-                android:id="@+id/sidePanelToggleBar"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="14dp"
-                android:background="@drawable/bg_input"
-                android:orientation="horizontal"
-                android:padding="4dp"
-                android:visibility="gone">
+                android:orientation="horizontal">
 
-            <TextView
-                    android:id="@+id/tabShowExercises"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:background="@drawable/bg_card"
-                    android:gravity="center"
-                    android:text="Questões"
+                <Button
+                    android:id="@+id/btnHeaderSecondary"
+                    style="?android:attr/borderlessButtonStyle"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginEnd="8dp"
+                    android:text="← Aula"
                     android:textColor="@color/ink"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+                    android:visibility="gone" />
 
-            <TextView
-                    android:id="@+id/tabShowNotes"
+                <Button
+                    android:id="@+id/btnHeaderPrimary"
                     android:layout_width="0dp"
-                    android:layout_height="36dp"
+                    android:layout_height="44dp"
                     android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="Anotações"
-                    android:textColor="@color/muted"
-                    android:textSize="12sp"
+                    android:backgroundTint="@color/accent"
+                    android:text="Responder exercícios →"
+                    android:textColor="@color/white"
                     android:textStyle="bold" />
-
-            <TextView
-                    android:id="@+id/tabShowVideo"
-                    android:layout_width="0dp"
-                    android:layout_height="36dp"
-                    android:layout_weight="1"
-                    android:gravity="center"
-                    android:text="Videoaula"
-                    android:textColor="@color/muted"
-                    android:textSize="12sp"
-                    android:textStyle="bold" />
+            </LinearLayout>
         </LinearLayout>
 
-        <!-- SEÇÃO 1: VIDEOPLAYER (VideoPlayer.tsx) -->
+        <!-- ABA DA TELA DE EXERCÍCIOS / DIAGNÓSTICO (mantém Aula separada e Anotações disponíveis) -->
         <LinearLayout
-                android:id="@+id/videoSection"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:background="@drawable/bg_card_dark"
-                android:orientation="vertical"
-                android:padding="16dp">
+            android:id="@+id/sidePanelToggleBar"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="14dp"
+            android:background="@drawable/bg_input"
+            android:orientation="horizontal"
+            android:padding="4dp"
+            android:visibility="gone">
+
+            <TextView
+                android:id="@+id/tabShowExercises"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:background="@drawable/bg_card"
+                android:gravity="center"
+                android:text="Questões"
+                android:textColor="@color/ink"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+
+            <TextView
+                android:id="@+id/tabShowNotes"
+                android:layout_width="0dp"
+                android:layout_height="38dp"
+                android:layout_weight="1"
+                android:gravity="center"
+                android:text="✎ Anotações"
+                android:textColor="@color/muted"
+                android:textSize="12sp"
+                android:textStyle="bold" />
+        </LinearLayout>
+
+        <!-- SEÇÃO 1: VIDEOPLAYER (Exclusivo da fase Aula) -->
+        <LinearLayout
+            android:id="@+id/videoSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:background="@drawable/bg_card_dark"
+            android:orientation="vertical"
+            android:padding="16dp">
 
             <!-- Estado sem vídeo vinculado -->
             <LinearLayout
-                    android:id="@+id/videoEmptyState"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:gravity="center"
-                    android:orientation="vertical"
-                    android:paddingVertical="20dp">
-
-                <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="▶"
-                        android:textColor="@color/lime"
-                        android:textSize="36sp" />
-
-                <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="8dp"
-                        android:text="Adicione uma videoaula"
-                        android:textColor="@color/white"
-                        android:textSize="20sp"
-                        android:textStyle="bold" />
-
-                <TextView
-                        android:id="@+id/txtVideoEmptyHint"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="4dp"
-                        android:gravity="center"
-                        android:text="Cole abaixo o link de um vídeo do YouTube, Vimeo ou Dailymotion."
-                        android:textColor="#99FFFFFF"
-                        android:textSize="13sp" />
-
-                <Button
-                        android:id="@+id/btnSearchYoutube"
-                        android:layout_width="wrap_content"
-                        android:layout_height="40dp"
-                        android:layout_marginTop="14dp"
-                        android:backgroundTint="#26FFFFFF"
-                        android:text="🔍 Buscar aulas no YouTube ↗"
-                        android:textColor="@color/white"
-                        android:textSize="12sp" />
-            </LinearLayout>
-
-            <!-- WebView para vídeo incorporado -->
-            <WebView
-                    android:id="@+id/webViewVideo"
-                    android:layout_width="match_parent"
-                    android:layout_height="210dp"
-                    android:visibility="gone" />
-
-            <!-- Barra de controles quando há vídeo -->
-            <LinearLayout
-                    android:id="@+id/videoControlBar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="10dp"
-                    android:gravity="center_vertical"
-                    android:orientation="horizontal"
-                    android:visibility="gone">
-
-                <TextView
-                        android:id="@+id/txtVideoProvider"
-                        android:layout_width="0dp"
-                        android:layout_height="wrap_content"
-                        android:layout_weight="1"
-                        android:text="Reproduzindo via YouTube"
-                        android:textColor="#80FFFFFF"
-                        android:textSize="12sp" />
-
-                <TextView
-                        android:id="@+id/btnChangeVideo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:padding="6dp"
-                        android:text="Trocar vídeo"
-                        android:textColor="@color/white"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-
-                <TextView
-                        android:id="@+id/btnRemoveVideo"
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:layout_marginStart="8dp"
-                        android:padding="6dp"
-                        android:text="✕ Remover"
-                        android:textColor="@color/accent"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-            </LinearLayout>
-
-            <!-- Formulário de colar link -->
-            <LinearLayout
-                    android:id="@+id/videoFormBar"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="12dp"
-                    android:orientation="horizontal">
-
-                <EditText
-                        android:id="@+id/edtVideoUrl"
-                        android:layout_width="0dp"
-                        android:layout_height="44dp"
-                        android:layout_weight="1"
-                        android:background="#1AFFFFFF"
-                        android:hint="https://www.youtube.com/watch?v=..."
-                        android:inputType="textUri"
-                        android:paddingHorizontal="12dp"
-                        android:textColor="@color/white"
-                        android:textColorHint="#66FFFFFF"
-                        android:textSize="13sp" />
-
-                <Button
-                        android:id="@+id/btnSaveVideoUrl"
-                        android:layout_width="wrap_content"
-                        android:layout_height="44dp"
-                        android:layout_marginStart="8dp"
-                        android:backgroundTint="@color/lime"
-                        android:text="Vincular"
-                        android:textColor="@color/ink"
-                        android:textSize="12sp"
-                        android:textStyle="bold" />
-            </LinearLayout>
-
-            <TextView
-                    android:id="@+id/txtVideoError"
-                    android:layout_width="wrap_content"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="6dp"
-                    android:textColor="@color/accent"
-                    android:textSize="12sp"
-                    android:visibility="gone" />
-        </LinearLayout>
-
-        <!-- SEÇÃO 2: EDITOR DE ANOTAÇÕES (NotesEditor.tsx) -->
-        <LinearLayout
-                android:id="@+id/notesSection"
+                android:id="@+id/videoEmptyState"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="16dp"
-                android:orientation="vertical">
+                android:gravity="center"
+                android:orientation="vertical"
+                android:paddingVertical="16dp"
+                android:visibility="gone">
 
-            <TextView
+                <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
-                    android:layout_marginBottom="8dp"
-                    android:text="✎ Anotações"
-                    android:textColor="@color/ink"
+                    android:text="▶"
+                    android:textColor="@color/lime"
+                    android:textSize="36sp" />
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp"
+                    android:text="Adicione uma videoaula do YouTube"
+                    android:textColor="@color/white"
                     android:textSize="18sp"
                     android:textStyle="bold" />
 
+                <TextView
+                    android:id="@+id/txtVideoEmptyHint"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="4dp"
+                    android:gravity="center"
+                    android:text="Cole abaixo o link de um vídeo do YouTube."
+                    android:textColor="#99FFFFFF"
+                    android:textSize="13sp" />
+            </LinearLayout>
+
+            <!-- WebView para vídeo incorporado do YouTube -->
+            <WebView
+                android:id="@+id/webViewVideo"
+                android:layout_width="match_parent"
+                android:layout_height="210dp"
+                android:visibility="gone" />
+
+            <!-- Barra de controles quando há vídeo -->
             <LinearLayout
+                android:id="@+id/videoControlBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="10dp"
+                android:gravity="center_vertical"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <TextView
+                    android:id="@+id/txtVideoProvider"
+                    android:layout_width="0dp"
+                    android:layout_height="wrap_content"
+                    android:layout_weight="1"
+                    android:text="Aula padrão · YouTube"
+                    android:textColor="#99FFFFFF"
+                    android:textSize="12sp" />
+
+                <TextView
+                    android:id="@+id/btnChangeVideo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:padding="6dp"
+                    android:text="Trocar link"
+                    android:textColor="@color/lime"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+
+                <TextView
+                    android:id="@+id/btnRestoreDefaultVideo"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:padding="6dp"
+                    android:text="↺ Padrão"
+                    android:textColor="@color/accent"
+                    android:textSize="12sp"
+                    android:textStyle="bold"
+                    android:visibility="gone" />
+            </LinearLayout>
+
+            <!-- Formulário de colar/trocar link do YouTube -->
+            <LinearLayout
+                android:id="@+id/videoFormBar"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="12dp"
+                android:orientation="horizontal"
+                android:visibility="gone">
+
+                <EditText
+                    android:id="@+id/edtVideoUrl"
+                    android:layout_width="0dp"
+                    android:layout_height="44dp"
+                    android:layout_weight="1"
+                    android:background="#1AFFFFFF"
+                    android:hint="https://www.youtube.com/watch?v=..."
+                    android:inputType="textUri"
+                    android:paddingHorizontal="12dp"
+                    android:textColor="@color/white"
+                    android:textColorHint="#66FFFFFF"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnSaveVideoUrl"
+                    android:layout_width="wrap_content"
+                    android:layout_height="44dp"
+                    android:layout_marginStart="8dp"
+                    android:backgroundTint="@color/lime"
+                    android:text="Salvar"
+                    android:textColor="@color/ink"
+                    android:textSize="12sp"
+                    android:textStyle="bold" />
+            </LinearLayout>
+
+            <TextView
+                android:id="@+id/txtVideoError"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="6dp"
+                android:textColor="@color/accent"
+                android:textSize="12sp"
+                android:visibility="gone" />
+
+            <Button
+                android:id="@+id/btnSearchYoutube"
+                android:layout_width="wrap_content"
+                android:layout_height="38dp"
+                android:layout_marginTop="10dp"
+                android:backgroundTint="#26FFFFFF"
+                android:text="🔍 Buscar outras aulas no YouTube ↗"
+                android:textAllCaps="false"
+                android:textColor="@color/white"
+                android:textSize="12sp" />
+        </LinearLayout>
+
+        <!-- SEÇÃO 2: EXERCÍCIOS E DIAGNÓSTICO -->
+        <LinearLayout
+            android:id="@+id/exercisesSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical"
+            android:visibility="gone" />
+
+        <!-- SEÇÃO 3: EDITOR DE ANOTAÇÕES (Disponível tanto na Aula quanto em Exercícios/Diagnóstico) -->
+        <LinearLayout
+            android:id="@+id/notesSection"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:orientation="vertical">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginBottom="8dp"
+                android:text="✎ Suas anotações"
+                android:textColor="@color/ink"
+                android:textSize="18sp"
+                android:textStyle="bold" />
+
+            <LinearLayout
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:background="@drawable/bg_card"
+                android:orientation="vertical">
+
+                <HorizontalScrollView
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:background="@drawable/bg_card"
-                    android:orientation="vertical">
-
-                <!-- Barra de ferramentas de formatação -->
-                <HorizontalScrollView
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:scrollbars="none">
+                    android:scrollbars="none">
 
                     <LinearLayout
-                            android:layout_width="wrap_content"
-                            android:layout_height="44dp"
-                            android:gravity="center_vertical"
-                            android:orientation="horizontal"
-                            android:paddingHorizontal="8dp">
+                        android:layout_width="wrap_content"
+                        android:layout_height="44dp"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
+                        android:paddingHorizontal="8dp">
 
                         <Button
-                                android:id="@+id/btnFmtH2"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="44dp"
-                                android:layout_height="36dp"
-                                android:text="H2"
-                                android:textColor="@color/ink"
-                                android:textSize="12sp"
-                                android:textStyle="bold" />
+                            android:id="@+id/btnFmtH2"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="44dp"
+                            android:layout_height="36dp"
+                            android:text="H2"
+                            android:textColor="@color/ink"
+                            android:textSize="12sp"
+                            android:textStyle="bold" />
 
                         <Button
-                                android:id="@+id/btnFmtBold"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="40dp"
-                                android:layout_height="36dp"
-                                android:text="B"
-                                android:textColor="@color/ink"
-                                android:textSize="13sp"
-                                android:textStyle="bold" />
+                            android:id="@+id/btnFmtBullet"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="64dp"
+                            android:layout_height="36dp"
+                            android:text="• Lista"
+                            android:textAllCaps="false"
+                            android:textColor="@color/ink"
+                            android:textSize="12sp" />
 
                         <Button
-                                android:id="@+id/btnFmtItalic"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="40dp"
-                                android:layout_height="36dp"
-                                android:text="I"
-                                android:textColor="@color/ink"
-                                android:textSize="13sp"
-                                android:textStyle="italic" />
+                            android:id="@+id/btnFmtQuote"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="44dp"
+                            android:layout_height="36dp"
+                            android:text="❝"
+                            android:textColor="@color/accent"
+                            android:textSize="14sp" />
 
                         <Button
-                                android:id="@+id/btnFmtUnderline"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="40dp"
-                                android:layout_height="36dp"
-                                android:text="U"
-                                android:textColor="@color/ink"
-                                android:textSize="13sp" />
-
-                        <Button
-                                android:id="@+id/btnFmtBullet"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="48dp"
-                                android:layout_height="36dp"
-                                android:text="• Lista"
-                                android:textColor="@color/ink"
-                                android:textSize="11sp" />
-
-                        <Button
-                                android:id="@+id/btnFmtQuote"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="44dp"
-                                android:layout_height="36dp"
-                                android:text="❝"
-                                android:textColor="@color/accent"
-                                android:textSize="14sp" />
-
-                        <Button
-                                android:id="@+id/btnFmtClear"
-                                style="?android:attr/borderlessButtonStyle"
-                                android:layout_width="56dp"
-                                android:layout_height="36dp"
-                                android:text="Limpar"
-                                android:textColor="@color/muted"
-                                android:textSize="11sp" />
+                            android:id="@+id/btnFmtClear"
+                            style="?android:attr/borderlessButtonStyle"
+                            android:layout_width="68dp"
+                            android:layout_height="36dp"
+                            android:text="Limpar"
+                            android:textAllCaps="false"
+                            android:textColor="@color/muted"
+                            android:textSize="12sp" />
                     </LinearLayout>
                 </HorizontalScrollView>
 
                 <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/line" />
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/line" />
 
                 <EditText
-                        android:id="@+id/edtNotes"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:background="@null"
-                        android:gravity="top|start"
-                        android:hint="Comece suas anotações… use títulos, listas e destaques para revisar depois."
-                        android:inputType="textMultiLine|textCapSentences"
-                        android:lineSpacingExtra="4dp"
-                        android:minHeight="220dp"
-                        android:padding="16dp"
-                        android:textColor="@color/ink"
-                        android:textColorHint="@color/muted"
-                        android:textSize="15sp" />
+                    android:id="@+id/edtNotes"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:background="@null"
+                    android:gravity="top|start"
+                    android:hint="Comece suas anotações… elas ficam salvas automaticamente para este tópico."
+                    android:inputType="textMultiLine|textCapSentences"
+                    android:lineSpacingExtra="4dp"
+                    android:minHeight="180dp"
+                    android:padding="16dp"
+                    android:textColor="@color/ink"
+                    android:textColorHint="@color/muted"
+                    android:textSize="15sp" />
 
                 <View
-                        android:layout_width="match_parent"
-                        android:layout_height="1dp"
-                        android:background="@color/line" />
+                    android:layout_width="match_parent"
+                    android:layout_height="1dp"
+                    android:background="@color/line" />
 
-                <!-- Rodapé de contagem de palavras e horário de salvamento -->
                 <LinearLayout
-                        android:layout_width="match_parent"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:paddingHorizontal="16dp"
+                    android:paddingVertical="10dp">
+
+                    <TextView
+                        android:id="@+id/txtWordCount"
+                        android:layout_width="0dp"
                         android:layout_height="wrap_content"
-                        android:orientation="horizontal"
-                        android:paddingHorizontal="16dp"
-                        android:paddingVertical="10dp">
+                        android:layout_weight="1"
+                        android:text="0 palavras"
+                        android:textColor="@color/muted"
+                        android:textSize="11sp" />
 
                     <TextView
-                            android:id="@+id/txtWordCount"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            android:text="0 palavras"
-                            android:textColor="@color/muted"
-                            android:textSize="11sp" />
-
-                    <TextView
-                            android:id="@+id/txtSavedStatus"
-                            android:layout_width="wrap_content"
-                            android:layout_height="wrap_content"
-                            android:text="Salvamento automático"
-                            android:textColor="@color/muted"
-                            android:textSize="11sp" />
+                        android:id="@+id/txtSavedStatus"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="Salvamento automático"
+                        android:textColor="@color/muted"
+                        android:textSize="11sp" />
                 </LinearLayout>
             </LinearLayout>
 
             <!-- Call to action inferior da fase Aula -->
             <LinearLayout
-                    android:id="@+id/aulaBottomBanner"
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:layout_marginTop="16dp"
-                    android:background="@drawable/bg_card_dark"
-                    android:gravity="center_vertical"
-                    android:orientation="vertical"
-                    android:padding="18dp">
-
-                <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        android:text="Assistiu à aula e fechou suas anotações? Hora de testar o que aprendeu."
-                        android:textColor="#B3FFFFFF"
-                        android:textSize="13sp" />
-
-                <Button
-                        android:id="@+id/btnBottomGoExercises"
-                        android:layout_width="match_parent"
-                        android:layout_height="46dp"
-                        android:layout_marginTop="12dp"
-                        android:backgroundTint="@color/lime"
-                        android:text="Responder exercícios →"
-                        android:textColor="@color/ink"
-                        android:textStyle="bold" />
-            </LinearLayout>
-        </LinearLayout>
-
-        <!-- SEÇÃO 3: EXERCÍCIOS E DIAGNÓSTICO (Exercises.tsx) -->
-        <LinearLayout
-                android:id="@+id/exercisesSection"
+                android:id="@+id/aulaBottomBanner"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
+                android:background="@drawable/bg_card_dark"
+                android:gravity="center_vertical"
                 android:orientation="vertical"
-                android:visibility="gone" />
+                android:padding="18dp">
+
+                <TextView
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:text="Assistiu à aula e fechou suas anotações? Hora de testar o que aprendeu."
+                    android:textColor="#B3FFFFFF"
+                    android:textSize="13sp" />
+
+                <Button
+                    android:id="@+id/btnBottomGoExercises"
+                    android:layout_width="match_parent"
+                    android:layout_height="46dp"
+                    android:layout_marginTop="12dp"
+                    android:backgroundTint="@color/lime"
+                    android:text="Responder exercícios →"
+                    android:textColor="@color/ink"
+                    android:textStyle="bold" />
+            </LinearLayout>
+        </LinearLayout>
 
     </LinearLayout>
 </ScrollView>

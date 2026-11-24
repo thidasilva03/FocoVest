@@ -1,67 +1,63 @@
 package com.example.focovest.domain;
 
-import com.example.focovest.data.DataRepository;
-import com.example.focovest.data.DataRepository.ExamId;
-import com.example.focovest.data.DataRepository.SubjectId;
-import com.example.focovest.data.DataRepository.Topic;
-import java.text.SimpleDateFormat;
-import java.util.*;
+import com.example.focovest.model.ExamId;
+import com.example.focovest.model.SubjectId;
+import com.example.focovest.model.Topic;
 
+import java.text.SimpleDateFormat;
+import java.util.ArrayList;
+import java.util.Calendar;
+import java.util.Date;
+import java.util.EnumMap;
+import java.util.HashSet;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Queue;
+import java.util.Set;
+
+/**
+ * Motor de planejamento de estudos dedicado por objetivo (ENEM, PSC, SIS ou Macro).
+ * Utiliza exclusivamente o peso de incidência da prova selecionada (weight_*).
+ */
 public class PlanEngine {
 
     public static final int TOPIC_MINUTES_AVG = 55;
-
-    public static class StudyPlan {
-        public String id;
-        public String name;
-        public List<ExamId> exams;
-        public String deadline; // YYYY-MM-DD ou null
-        public int dailyHours;
-        public List<Integer> studyDays; // 0 = Dom .. 6 = Sáb
-        public String startDate; // YYYY-MM-DD ou null
-
-        public StudyPlan(String id, String name, List<ExamId> exams, String deadline,
-                         int dailyHours, List<Integer> studyDays, String startDate) {
-            this.id = id;
-            this.name = name;
-            this.exams = exams;
-            this.deadline = deadline;
-            this.dailyHours = dailyHours;
-            this.studyDays = studyDays;
-            this.startDate = startDate;
-        }
-    }
+    private static final int MAX_SCHEDULE_DAYS = 400;
+    private static final int MAX_CALENDAR_ITERATIONS = 1000;
 
     public static class PlanDay {
-        public Date date;
-        public List<String> topicIds;
-        public PlanDay(Date date, List<String> topicIds) {
+        public final Date date;
+        public final List<Topic> topics;
+
+        public PlanDay(Date date, List<Topic> topics) {
             this.date = date;
-            this.topicIds = topicIds;
+            this.topics = topics;
         }
     }
 
     public static class PlanResult {
-        public List<Topic> edital;
-        public List<String> topicIds;
-        public List<PlanDay> days;
-        public List<Topic> dropped;
-        public Date endDate;
-        public int perDay;
+        public final ExamId exam;
+        public final List<Topic> edital;
+        public final List<Topic> completedTopics;
+        public final List<PlanDay> days;
+        public final Date endDate;
+        public final int perDay;
 
-        public PlanResult(List<Topic> edital, List<String> topicIds, List<PlanDay> days,
-                          List<Topic> dropped, Date endDate, int perDay) {
+        public PlanResult(ExamId exam, List<Topic> edital, List<Topic> completedTopics,
+                          List<PlanDay> days, Date endDate, int perDay) {
+            this.exam = exam;
             this.edital = edital;
-            this.topicIds = topicIds;
+            this.completedTopics = completedTopics;
             this.days = days;
-            this.dropped = dropped;
             this.endDate = endDate;
             this.perDay = perDay;
         }
     }
 
     public static String getIncidenceLabel(int tier) {
-        if (tier == 3) return "Alta";
+        if (tier >= 3) return "Alta";
         if (tier == 2) return "Média";
         return "Baixa";
     }
@@ -87,45 +83,36 @@ public class PlanEngine {
         return new SimpleDateFormat("yyyy-MM-dd", Locale.US).format(d);
     }
 
-    public static Date parseDay(String key) {
-        try {
-            return startOfDay(new SimpleDateFormat("yyyy-MM-dd", Locale.US).parse(key));
-        } catch (Exception e) {
-            return startOfDay(new Date());
-        }
-    }
-
     public static String fmtShort(Date d) {
         return new SimpleDateFormat("EEE, dd/MM", new Locale("pt", "BR")).format(d);
     }
 
-    public static int getJsDayOfWeek(Date d) {
+    public static int getDayOfWeekIndex(Date d) {
         Calendar cal = Calendar.getInstance();
         cal.setTime(d);
         return cal.get(Calendar.DAY_OF_WEEK) - 1; // 0 = Domingo .. 6 = Sábado
     }
 
     public static int topicsPerDay(int hours) {
-        return Math.max(1, (hours * 60) / TOPIC_MINUTES_AVG);
+        return Math.max(1, (Math.max(1, hours) * 60) / TOPIC_MINUTES_AVG);
     }
 
-    public static int incidenceOf(Topic topic, List<ExamId> exams) {
-        int max = 0;
-        for (ExamId e : exams) {
-            Integer v = topic.incidence.get(e);
-            if (v != null && v > max) max = v;
-        }
-        return max;
-    }
-
-    public static List<Topic> editalTopics(List<ExamId> exams) {
+    /**
+     * Monta a lista ordenada do edital para UMA única prova e etapa (ENEM, PSC 1/2/3, SIS 1/2/3 ou Macro),
+     * filtrando weight > 0 e intercalando disciplinas por ordem decrescente de incidência (3 → 2 → 1).
+     */
+    public static List<Topic> editalTopicsForExam(List<Topic> allTopics, ExamId exam, int highSchoolYear) {
         List<Topic> out = new ArrayList<>();
+        if (allTopics == null || exam == null) return out;
+
         int[] tiers = {3, 2, 1};
         for (int tier : tiers) {
             Map<SubjectId, Queue<Topic>> bySubject = new EnumMap<>(SubjectId.class);
-            for (SubjectId s : SubjectId.values()) bySubject.put(s, new LinkedList<>());
-            for (Topic t : DataRepository.TOPICS) {
-                if (incidenceOf(t, exams) == tier) {
+            for (SubjectId s : SubjectId.values()) {
+                bySubject.put(s, new LinkedList<>());
+            }
+            for (Topic t : allTopics) {
+                if (t.getWeight(exam, highSchoolYear) == tier) {
                     bySubject.get(t.subject).add(t);
                 }
             }
@@ -144,69 +131,99 @@ public class PlanEngine {
         return out;
     }
 
-    public static PlanResult buildPlan(StudyPlan plan, List<String> completed, Map<String, String> completedAt) {
-        Date today = startOfDay(new Date());
-        List<Topic> edital = editalTopics(plan.exams);
-        boolean fixed = plan.startDate != null && !plan.startDate.isEmpty();
-        Date start = fixed ? parseDay(plan.startDate) : today;
-        Date deadline = (plan.deadline != null && !plan.deadline.isEmpty()) ? parseDay(plan.deadline) : null;
-        int cap = plan.dailyHours * 60;
-        int perDay = topicsPerDay(plan.dailyHours);
-        Set<String> done = new HashSet<>(completed);
+    public static List<Topic> editalTopicsForExam(List<Topic> allTopics, ExamId exam) {
+        return editalTopicsForExam(allTopics, exam, 0);
+    }
 
-        List<Topic> queue = new ArrayList<>();
+    /**
+     * Agrupa os tópicos de um edital por disciplina na ordem oficial de SubjectId,
+     * preservando a prioridade de incidência dentro de cada disciplina.
+     */
+    public static Map<SubjectId, List<Topic>> groupBySubject(List<Topic> editalTopics) {
+        Map<SubjectId, List<Topic>> grouped = new EnumMap<>(SubjectId.class);
+        if (editalTopics == null) return grouped;
+        for (Topic t : editalTopics) {
+            List<Topic> list = grouped.get(t.subject);
+            if (list == null) {
+                list = new ArrayList<>();
+                grouped.put(t.subject, list);
+            }
+            list.add(t);
+        }
+        return grouped;
+    }
+
+    /**
+     * Gera o cronograma dedicado para o objetivo e etapa escolar informados, respeitando horas diárias,
+     * dias de estudo e tópicos já concluídos pelo aluno.
+     */
+    public static PlanResult buildPlanForExam(ExamId exam, int highSchoolYear, List<Topic> allTopics,
+                                              int dailyHours, List<Integer> studyDays,
+                                              Set<String> completedIds,
+                                              Map<String, String> completedAtMap) {
+        Date today = startOfDay(new Date());
+        List<Topic> edital = editalTopicsForExam(allTopics, exam, highSchoolYear);
+        Set<String> done = completedIds != null ? completedIds : new HashSet<>();
+
+        int safeHours = Math.max(1, dailyHours);
+        int capMinutes = safeHours * 60;
+        int perDay = topicsPerDay(safeHours);
+
+        List<Topic> completedTopics = new ArrayList<>();
+        List<Topic> pendingQueue = new ArrayList<>();
         for (Topic t : edital) {
-            if (fixed || !done.contains(t.id)) queue.add(t);
+            if (done.contains(t.id)) {
+                completedTopics.add(t);
+            } else {
+                pendingQueue.add(t);
+            }
         }
 
         int usedToday = 0;
-        if (!fixed) {
-            String todayStr = dayKey(today);
-            for (Topic t : edital) {
-                if (done.contains(t.id) && completedAt.containsKey(t.id)) {
-                    String cDate = completedAt.get(t.id);
-                    if (cDate != null && cDate.startsWith(todayStr)) {
-                        usedToday += t.minutes;
-                    }
+        String todayStr = dayKey(today);
+        if (completedAtMap != null) {
+            for (Topic t : completedTopics) {
+                String cDate = completedAtMap.get(t.id);
+                if (cDate != null && cDate.startsWith(todayStr)) {
+                    usedToday += t.minutes;
                 }
             }
+        }
+
+        Set<Integer> validDays = new HashSet<>();
+        if (studyDays != null) {
+            for (Integer d : studyDays) {
+                if (d != null && d >= 0 && d <= 6) validDays.add(d);
+            }
+        }
+        if (validDays.isEmpty()) {
+            for (int i = 1; i <= 5; i++) validDays.add(i);
         }
 
         List<PlanDay> days = new ArrayList<>();
-        Set<String> scheduled = new HashSet<>();
         int qi = 0;
+        int iterations = 0;
 
-        if (plan.studyDays != null && !plan.studyDays.isEmpty()) {
-            for (Date d = start; qi < queue.size(); d = addDays(d, 1)) {
-                if (deadline != null && !d.before(deadline)) break;
-                if (days.size() > 400) break;
-                if (!plan.studyDays.contains(getJsDayOfWeek(d))) continue;
+        for (Date d = today; qi < pendingQueue.size()
+                && days.size() < MAX_SCHEDULE_DAYS
+                && iterations < MAX_CALENDAR_ITERATIONS; d = addDays(d, 1), iterations++) {
+            if (!validDays.contains(getDayOfWeekIndex(d))) continue;
 
-                int used = dayKey(d).equals(dayKey(today)) ? usedToday : 0;
-                List<String> ids = new ArrayList<>();
-                while (qi < queue.size() && (used + queue.get(qi).minutes <= cap || (ids.isEmpty() && used == 0))) {
-                    ids.add(queue.get(qi).id);
-                    scheduled.add(queue.get(qi).id);
-                    used += queue.get(qi).minutes;
-                    qi++;
-                }
-                if (!ids.isEmpty()) days.add(new PlanDay(d, ids));
+            int used = dayKey(d).equals(todayStr) ? usedToday : 0;
+            List<Topic> dayTopics = new ArrayList<>();
+            while (qi < pendingQueue.size()
+                    && (used + pendingQueue.get(qi).minutes <= capMinutes || (dayTopics.isEmpty() && used == 0))) {
+                Topic next = pendingQueue.get(qi);
+                dayTopics.add(next);
+                used += next.minutes;
+                qi++;
             }
-        }
-
-        List<String> topicIds = new ArrayList<>();
-        for (Topic t : edital) {
-            if (scheduled.contains(t.id) || (!fixed && done.contains(t.id))) {
-                topicIds.add(t.id);
+            if (!dayTopics.isEmpty()) {
+                days.add(new PlanDay(d, dayTopics));
             }
-        }
-
-        List<Topic> dropped = new ArrayList<>();
-        for (Topic t : queue) {
-            if (!scheduled.contains(t.id)) dropped.add(t);
         }
 
         Date endDate = days.isEmpty() ? null : days.get(days.size() - 1).date;
-        return new PlanResult(edital, topicIds, days, dropped, endDate, perDay);
+        return new PlanResult(exam, edital, completedTopics, days, endDate, perDay);
     }
 }

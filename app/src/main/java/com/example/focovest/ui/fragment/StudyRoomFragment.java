@@ -1,55 +1,97 @@
 package com.example.focovest.ui.fragment;
 
+import android.annotation.SuppressLint;
+import android.content.ActivityNotFoundException;
 import android.content.Intent;
+import android.content.res.ColorStateList;
 import android.graphics.Color;
 import android.graphics.Typeface;
 import android.graphics.drawable.GradientDrawable;
 import android.net.Uri;
 import android.os.Bundle;
-import android.text.*;
-import android.text.style.StyleSpan;
-import android.text.style.UnderlineSpan;
-import android.view.*;
+import android.text.Editable;
+import android.text.TextWatcher;
+import android.view.LayoutInflater;
+import android.view.View;
+import android.view.ViewGroup;
+import android.webkit.WebChromeClient;
+import android.webkit.WebResourceRequest;
 import android.webkit.WebSettings;
 import android.webkit.WebView;
 import android.webkit.WebViewClient;
-import android.widget.*;
+import android.widget.AdapterView;
+import android.widget.ArrayAdapter;
+import android.widget.Button;
+import android.widget.EditText;
+import android.widget.LinearLayout;
+import android.widget.Spinner;
+import android.widget.TextView;
+import android.widget.Toast;
+
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.fragment.app.Fragment;
+
 import com.example.focovest.R;
-import com.example.focovest.util.VideoEmbedHelper;
-import com.example.focovest.data.DataRepository;
-import com.example.focovest.data.DataRepository.*;
+import com.example.focovest.data.FocoVestRepository;
+import com.example.focovest.domain.PlanEngine;
 import com.example.focovest.domain.PlanEngine.PlanResult;
-import com.example.focovest.data.StoreManager;
-import com.example.focovest.ui.activity.MainActivity;
+import com.example.focovest.model.ExamId;
+import com.example.focovest.model.Question;
+import com.example.focovest.model.Topic;
+import com.example.focovest.model.User;
+import com.example.focovest.model.UserTopicProgress;
+import com.example.focovest.util.VideoEmbedHelper;
+import com.google.android.material.button.MaterialButton;
 
 import java.text.SimpleDateFormat;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Date;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
+/**
+ * Sala de Estudos offline-first:
+ * - Carrega automaticamente custom_video_url ou default_video_url no WebView do YouTube.
+ * - Mantém a tela de Aula (player) separada de Exercícios / Diagnóstico.
+ * - Mantém o editor de Anotações disponível em ambas as telas, salvando em tempo real no SQLite.
+ */
 public class StudyRoomFragment extends Fragment {
 
-    private static final String[] LETTERS = {"A", "B", "C", "D", "E"};
+    /** Nome do argumento declarado em nav_graph.xml. */
+    public static final String ARG_TOPIC_ID = "topicId";
 
-    private StoreManager store;
+    private static final String[] LETTERS = {"A", "B", "C", "D", "E"};
+    private static final String STATE_TOPIC_ID = "state_topic_id";
+    private static final String STATE_SUB_TAB = "state_sub_tab";
+
+    private FocoVestRepository repo;
+    private String userId;
+
+    private List<Topic> allTopics = new ArrayList<>();
     private Topic currentTopic;
+    private List<Question> currentQuestions = new ArrayList<>();
+    private UserTopicProgress currentProgress;
+
     private String currentPhase = "aula"; // "aula" | "exercicios" | "diagnostico"
-    private String activeSubTab = "questoes"; // "questoes" | "notas" | "video"
+    private String activeSubTab = "questoes"; // "questoes" | "notas"
     private boolean suppressNotesWatcher = false;
+    private boolean suppressSpinnerSelection = false;
     private boolean isEditingVideo = false;
-    private List<Topic> unlockedTopicsList = new ArrayList<>();
+    private String lastLoadedVideoSrc = null;
 
     private Spinner spinnerTopicSwitcher;
     private TextView btnNextInPlan, txtSubjectBadge, txtTopicMinutes, txtTopicTitle, txtTopicSummary;
     private TextView stepPillAula, stepPillExercicios, stepPillDiagnostico;
     private Button btnHeaderSecondary, btnHeaderPrimary;
     private LinearLayout sidePanelToggleBar;
-    private TextView tabShowExercises, tabShowNotes, tabShowVideo;
+    private TextView tabShowExercises, tabShowNotes;
 
     // Video views
     private LinearLayout videoSection, videoEmptyState, videoControlBar, videoFormBar;
-    private TextView txtVideoEmptyHint, txtVideoProvider, txtVideoError;
+    private TextView txtVideoEmptyHint, txtVideoProvider, txtVideoError, btnRestoreDefaultVideo;
     private WebView webViewVideo;
     private EditText edtVideoUrl;
 
@@ -63,20 +105,81 @@ public class StudyRoomFragment extends Fragment {
 
     @Nullable
     @Override
-    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container, @Nullable Bundle savedInstanceState) {
+    public View onCreateView(@NonNull LayoutInflater inflater, @Nullable ViewGroup container,
+                             @Nullable Bundle savedInstanceState) {
         View v = inflater.inflate(R.layout.fragment_study_room, container, false);
-        store = StoreManager.getInstance(requireContext());
+        repo = FocoVestRepository.getInstance(requireContext());
+        userId = FocoVestRepository.LOCAL_USER_ID;
 
         bindViews(v);
         setupWebView();
         setupNotesToolbar(v);
-        setupTopicSpinner();
 
-        String requestedId = ((MainActivity) requireActivity()).getSelectedTopicId();
-        if (requestedId == null) requestedId = store.getState().lastTopic;
+        String requestedId = null;
+        if (savedInstanceState != null) {
+            requestedId = savedInstanceState.getString(STATE_TOPIC_ID, null);
+            activeSubTab = savedInstanceState.getString(STATE_SUB_TAB, "questoes");
+        }
+        if (requestedId == null && getArguments() != null) {
+            requestedId = getArguments().getString(ARG_TOPIC_ID);
+        }
+        if (requestedId == null) {
+            User user = repo.getOrCreateLocalUser();
+            if (user != null) requestedId = user.lastTopicId;
+        }
+
+        setupTopicSpinner(requestedId);
         loadTopic(requestedId);
 
         return v;
+    }
+
+    /** Monta os argumentos para abrir a Sala de Estudos diretamente em um tópico. */
+    public static Bundle argsForTopic(String topicId) {
+        Bundle args = new Bundle();
+        args.putString(ARG_TOPIC_ID, topicId);
+        return args;
+    }
+
+    @Override
+    public void onSaveInstanceState(@NonNull Bundle outState) {
+        super.onSaveInstanceState(outState);
+        if (currentTopic != null) {
+            outState.putString(STATE_TOPIC_ID, currentTopic.id);
+        }
+        outState.putString(STATE_SUB_TAB, activeSubTab);
+    }
+
+    @Override
+    public void onPause() {
+        super.onPause();
+        if (webViewVideo != null) {
+            webViewVideo.onPause();
+        }
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        if (webViewVideo != null) {
+            webViewVideo.onResume();
+        }
+    }
+
+    @Override
+    public void onDestroyView() {
+        if (webViewVideo != null) {
+            webViewVideo.stopLoading();
+            webViewVideo.loadUrl("about:blank");
+            webViewVideo.onPause();
+            ViewGroup parent = (ViewGroup) webViewVideo.getParent();
+            if (parent != null) {
+                parent.removeView(webViewVideo);
+            }
+            webViewVideo.destroy();
+            webViewVideo = null;
+        }
+        super.onDestroyView();
     }
 
     private void bindViews(View v) {
@@ -96,7 +199,6 @@ public class StudyRoomFragment extends Fragment {
         sidePanelToggleBar = v.findViewById(R.id.sidePanelToggleBar);
         tabShowExercises = v.findViewById(R.id.tabShowExercises);
         tabShowNotes = v.findViewById(R.id.tabShowNotes);
-        tabShowVideo = v.findViewById(R.id.tabShowVideo);
 
         videoSection = v.findViewById(R.id.videoSection);
         videoEmptyState = v.findViewById(R.id.videoEmptyState);
@@ -105,6 +207,7 @@ public class StudyRoomFragment extends Fragment {
         txtVideoEmptyHint = v.findViewById(R.id.txtVideoEmptyHint);
         txtVideoProvider = v.findViewById(R.id.txtVideoProvider);
         txtVideoError = v.findViewById(R.id.txtVideoError);
+        btnRestoreDefaultVideo = v.findViewById(R.id.btnRestoreDefaultVideo);
         webViewVideo = v.findViewById(R.id.webViewVideo);
         edtVideoUrl = v.findViewById(R.id.edtVideoUrl);
 
@@ -117,99 +220,177 @@ public class StudyRoomFragment extends Fragment {
         exercisesSection = v.findViewById(R.id.exercisesSection);
 
         v.findViewById(R.id.btnSearchYoutube).setOnClickListener(view -> {
+            if (currentTopic == null) return;
             String q = Uri.encode(currentTopic.title + " aula vestibular");
-            startActivity(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + q)));
+            try {
+                startActivity(new Intent(Intent.ACTION_VIEW,
+                        Uri.parse("https://www.youtube.com/results?search_query=" + q)));
+            } catch (ActivityNotFoundException e) {
+                Toast.makeText(requireContext(), "Nenhum navegador encontrado para abrir o YouTube.",
+                        Toast.LENGTH_SHORT).show();
+            }
         });
 
         v.findViewById(R.id.btnSaveVideoUrl).setOnClickListener(view -> submitVideoUrl());
         v.findViewById(R.id.btnChangeVideo).setOnClickListener(view -> {
-            isEditingVideo = true;
-            renderVideoPlayer();
+            isEditingVideo = !isEditingVideo;
+            renderVideoPlayer(false);
         });
-        v.findViewById(R.id.btnRemoveVideo).setOnClickListener(view -> {
-            store.getState().videos.remove(currentTopic.id);
-            store.save();
-            edtVideoUrl.setText("");
+        btnRestoreDefaultVideo.setOnClickListener(view -> {
+            if (currentTopic == null) return;
+            repo.saveCustomVideoUrl(userId, currentTopic.id, null);
+            currentProgress.customVideoUrl = null;
             isEditingVideo = false;
-            renderVideoPlayer();
+            lastLoadedVideoSrc = null;
+            renderVideoPlayer(true);
+            Toast.makeText(requireContext(), "Videoaula padrão restaurada.", Toast.LENGTH_SHORT).show();
         });
 
         v.findViewById(R.id.btnBottomGoExercises).setOnClickListener(view -> setStage("exercicios"));
 
-        tabShowExercises.setOnClickListener(view -> { activeSubTab = "questoes"; updateVisibilityByPhase(); });
-        tabShowNotes.setOnClickListener(view -> { activeSubTab = "notas"; updateVisibilityByPhase(); });
-        tabShowVideo.setOnClickListener(view -> { activeSubTab = "video"; updateVisibilityByPhase(); });
+        tabShowExercises.setOnClickListener(view -> {
+            activeSubTab = "questoes";
+            updateVisibilityByPhase();
+        });
+        tabShowNotes.setOnClickListener(view -> {
+            activeSubTab = "notas";
+            updateVisibilityByPhase();
+        });
     }
 
+    @SuppressLint("SetJavaScriptEnabled")
     private void setupWebView() {
         WebSettings ws = webViewVideo.getSettings();
         ws.setJavaScriptEnabled(true);
         ws.setDomStorageEnabled(true);
-        webViewVideo.setWebViewClient(new WebViewClient());
+        ws.setMediaPlaybackRequiresUserGesture(false);
+        ws.setAllowFileAccess(false);
+        webViewVideo.setWebChromeClient(new WebChromeClient());
+        webViewVideo.setWebViewClient(new WebViewClient() {
+            @Override
+            public boolean shouldOverrideUrlLoading(WebView view, WebResourceRequest request) {
+                String host = request.getUrl() != null ? request.getUrl().getHost() : null;
+                if (host != null && (host.endsWith("youtube.com")
+                        || host.endsWith("youtube-nocookie.com")
+                        || host.endsWith("youtu.be")
+                        || host.endsWith("googlevideo.com"))) {
+                    return false;
+                }
+                return true;
+            }
+        });
     }
 
-    private void setupTopicSpinner() {
-        unlockedTopicsList.clear();
-        List<String> labels = new ArrayList<>();
-        for (Topic t : DataRepository.TOPICS) {
-            if (store.isTopicUnlocked(t.id)) {
-                unlockedTopicsList.add(t);
-                boolean done = store.getState().completed.contains(t.id);
-                labels.add((done ? "✓ " : "") + t.subject.name + " · " + t.title);
+    private void setupTopicSpinner(String preserveTopicId) {
+        List<Topic> dbTopics = repo.getAllTopics();
+        User user = repo.getOrCreateLocalUser();
+        Set<String> allowedIds = new java.util.HashSet<>();
+        if (user != null) {
+            for (ExamId ex : user.targetExams) {
+                for (Topic t : PlanEngine.editalTopicsForExam(dbTopics, ex, user.highSchoolYear)) {
+                    allowedIds.add(t.id);
+                }
             }
         }
+        if (preserveTopicId != null) {
+            allowedIds.add(preserveTopicId);
+        }
+
+        allTopics = new ArrayList<>();
+        for (Topic t : dbTopics) {
+            if (allowedIds.isEmpty() || allowedIds.contains(t.id)) {
+                allTopics.add(t);
+            }
+        }
+        if (allTopics.isEmpty()) {
+            allTopics = dbTopics;
+        }
+
+        Set<String> completedIds = repo.getCompletedTopicIds(userId);
+        List<String> labels = new ArrayList<>();
+        int targetIndex = 0;
+
+        for (int i = 0; i < allTopics.size(); i++) {
+            Topic t = allTopics.get(i);
+            boolean done = completedIds.contains(t.id);
+            labels.add((done ? "✓ " : "") + t.subject.name + " · " + t.title);
+            if (preserveTopicId != null && t.id.equals(preserveTopicId)) {
+                targetIndex = i;
+            }
+        }
+
+        suppressSpinnerSelection = true;
         ArrayAdapter<String> adapter = new ArrayAdapter<>(requireContext(),
                 android.R.layout.simple_spinner_dropdown_item, labels);
         spinnerTopicSwitcher.setAdapter(adapter);
-
+        if (!allTopics.isEmpty()) {
+            spinnerTopicSwitcher.setSelection(targetIndex, false);
+        }
         spinnerTopicSwitcher.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
             public void onItemSelected(AdapterView<?> parent, View view, int position, long id) {
-                Topic chosen = unlockedTopicsList.get(position);
+                if (suppressSpinnerSelection) return;
+                if (position < 0 || position >= allTopics.size()) return;
+                Topic chosen = allTopics.get(position);
                 if (currentTopic == null || !chosen.id.equals(currentTopic.id)) {
                     loadTopic(chosen.id);
                 }
             }
-            @Override public void onNothingSelected(AdapterView<?> parent) {}
+
+            @Override
+            public void onNothingSelected(AdapterView<?> parent) {}
         });
+        spinnerTopicSwitcher.post(() -> suppressSpinnerSelection = false);
     }
 
     private void loadTopic(String topicId) {
-        Topic found = DataRepository.findTopicById(topicId);
-        if (!store.isTopicUnlocked(found.id) && !unlockedTopicsList.isEmpty()) {
-            found = unlockedTopicsList.get(0);
-        }
+        Topic found = repo.getTopicById(topicId);
+        if (found == null) return;
+
         currentTopic = found;
-        store.getState().lastTopic = currentTopic.id;
-        store.save();
+        currentQuestions = repo.getQuestionsForTopic(currentTopic.id);
+        currentProgress = repo.getTopicProgress(userId, currentTopic.id);
+        repo.updateLastTopic(userId, currentTopic.id);
 
-        for (int i = 0; i < unlockedTopicsList.size(); i++) {
-            if (unlockedTopicsList.get(i).id.equals(currentTopic.id)) {
-                spinnerTopicSwitcher.setSelection(i);
+        // Sincroniza seleção no Spinner sem disparar reload recursivo
+        for (int i = 0; i < allTopics.size(); i++) {
+            if (allTopics.get(i).id.equals(currentTopic.id)) {
+                suppressSpinnerSelection = true;
+                spinnerTopicSwitcher.setSelection(i, false);
+                spinnerTopicSwitcher.post(() -> suppressSpinnerSelection = false);
                 break;
             }
         }
 
-        // Botão Próximo do Plano
-        PlanResult plan = store.getPlanResult();
-        String nextId = null;
-        for (String id : plan.topicIds) {
-            if (!id.equals(currentTopic.id) && !store.getState().completed.contains(id) && store.isTopicUnlocked(id)) {
-                nextId = id;
+        // Botão "Próximo do plano"
+        User user = repo.getOrCreateLocalUser();
+        ExamId primaryExam = (user != null && !user.targetExams.isEmpty()) ? user.targetExams.get(0) : ExamId.ENEM;
+        int highSchoolYear = user != null ? user.highSchoolYear : 0;
+        Set<String> completedIds = repo.getCompletedTopicIds(userId);
+        PlanResult plan = PlanEngine.buildPlanForExam(
+                primaryExam, highSchoolYear, allTopics,
+                user != null ? user.dailyHours : 3,
+                user != null ? user.studyDays : null,
+                completedIds, repo.getCompletedAtMap(userId));
+
+        Topic nextTopic = null;
+        for (Topic t : plan.edital) {
+            if (!t.id.equals(currentTopic.id) && !completedIds.contains(t.id)) {
+                nextTopic = t;
                 break;
             }
         }
-        if (nextId != null) {
-            final String targetNext = nextId;
-            Topic nextTopic = DataRepository.findTopicById(nextId);
+        if (nextTopic != null) {
+            final String nextId = nextTopic.id;
+            String examLabel = user != null ? user.getExamLabel(primaryExam) : primaryExam.id;
             btnNextInPlan.setVisibility(View.VISIBLE);
-            btnNextInPlan.setText("Próximo do plano: " + nextTopic.title + " →");
-            btnNextInPlan.setOnClickListener(v -> loadTopic(targetNext));
+            btnNextInPlan.setText("Próximo no " + examLabel + ": " + nextTopic.title + " →");
+            btnNextInPlan.setOnClickListener(v -> loadTopic(nextId));
         } else {
             btnNextInPlan.setVisibility(View.GONE);
         }
 
-        // Cabeçalho do Tópico
+        // Cabeçalho do tópico
         GradientDrawable badgeBg = new GradientDrawable();
         badgeBg.setColor(currentTopic.subject.getSoftColorInt());
         badgeBg.setCornerRadius(999f);
@@ -221,57 +402,61 @@ public class StudyRoomFragment extends Fragment {
         txtTopicTitle.setText(currentTopic.title);
         txtTopicSummary.setText(currentTopic.summary);
 
-        // Carregar Anotações do tópico
+        // Carregar anotações do usuário para este tópico
         suppressNotesWatcher = true;
-        String savedNotes = store.getState().notes.getOrDefault(currentTopic.id, "");
-        edtNotes.setText(savedNotes);
-        updateWordCount(savedNotes);
+        edtNotes.setText(currentProgress.notes);
+        updateWordCount(currentProgress.notes);
         txtSavedStatus.setText("Salvamento automático");
         suppressNotesWatcher = false;
 
         isEditingVideo = false;
+        lastLoadedVideoSrc = null;
         activeSubTab = "questoes";
+
         refreshPhaseState();
-        renderVideoPlayer();
+        renderVideoPlayer(true);
         renderExercises();
     }
 
     private void setStage(String stage) {
-        store.getState().topicStage.put(currentTopic.id, stage);
-        store.save();
+        if (currentTopic == null) return;
+        currentProgress.stage = stage;
+        repo.saveTopicStage(userId, currentTopic.id, stage);
         activeSubTab = "questoes";
+        if (!"aula".equals(stage) && webViewVideo != null) {
+            webViewVideo.onPause();
+        } else if ("aula".equals(stage) && webViewVideo != null) {
+            webViewVideo.onResume();
+        }
         refreshPhaseState();
         renderExercises();
     }
 
     private void redoTopic() {
-        for (Question q : currentTopic.questions) {
-            store.getState().answers.remove(q.id);
-        }
-        store.getState().topicStage.put(currentTopic.id, "exercicios");
-        if (store.getState().completed.contains(currentTopic.id)) {
-            store.toggleCompleted(currentTopic.id);
-        } else {
-            store.save();
-        }
-        setupTopicSpinner();
+        if (currentTopic == null) return;
+        repo.redoTopic(userId, currentTopic.id);
+        currentProgress = repo.getTopicProgress(userId, currentTopic.id);
+        activeSubTab = "questoes";
+        setupTopicSpinner(currentTopic.id);
         refreshPhaseState();
         renderExercises();
     }
 
     private void refreshPhaseState() {
-        boolean done = store.getState().completed.contains(currentTopic.id);
-        currentPhase = done ? "diagnostico" : store.getState().topicStage.getOrDefault(currentTopic.id, "aula");
+        if (currentTopic == null || currentProgress == null) return;
+        boolean done = currentProgress.completed;
+        currentPhase = done ? "diagnostico" : currentProgress.stage;
 
+        Map<String, Integer> answers = repo.getAnswersForTopic(userId, currentTopic.id);
         int answered = 0;
-        for (Question q : currentTopic.questions) {
-            if (store.getState().answers.containsKey(q.id)) answered++;
+        for (Question q : currentQuestions) {
+            if (answers.containsKey(q.id)) answered++;
         }
-        boolean allAnswered = answered == currentTopic.questions.size();
+        boolean allAnswered = !currentQuestions.isEmpty() && answered == currentQuestions.size();
 
-        int accent = getResources().getColor(R.color.accent, requireContext().getTheme());
-        int success = getResources().getColor(R.color.success, requireContext().getTheme());
-        int muted = getResources().getColor(R.color.muted, requireContext().getTheme());
+        int accent = getColorRes(R.color.accent);
+        int success = getColorRes(R.color.success);
+        int muted = getColorRes(R.color.muted);
 
         stepPillAula.setTextColor("aula".equals(currentPhase) ? accent : success);
         stepPillExercicios.setTextColor("exercicios".equals(currentPhase) ? accent : (done ? success : muted));
@@ -291,123 +476,149 @@ public class StudyRoomFragment extends Fragment {
             btnHeaderPrimary.setText("✓ Marcar como concluído");
             btnHeaderPrimary.setEnabled(allAnswered);
             btnHeaderPrimary.setAlpha(allAnswered ? 1f : 0.35f);
-            btnHeaderPrimary.setOnClickListener(v -> {
-                store.toggleCompleted(currentTopic.id);
-                setupTopicSpinner();
-                refreshPhaseState();
-                renderExercises();
-            });
+            btnHeaderPrimary.setOnClickListener(v -> completeCurrentTopic());
         } else {
             btnHeaderSecondary.setVisibility(View.VISIBLE);
-            btnHeaderSecondary.setText("↺ Refazer");
-            btnHeaderSecondary.setOnClickListener(v -> redoTopic());
+            btnHeaderSecondary.setText("← Aula");
+            btnHeaderSecondary.setOnClickListener(v -> {
+                currentPhase = "aula";
+                updateVisibilityByPhase();
+                btnHeaderSecondary.setText("↺ Refazer");
+                btnHeaderSecondary.setOnClickListener(v2 -> redoTopic());
+                btnHeaderPrimary.setText("Ver diagnóstico →");
+                btnHeaderPrimary.setEnabled(true);
+                btnHeaderPrimary.setAlpha(1f);
+                btnHeaderPrimary.setOnClickListener(v2 -> {
+                    refreshPhaseState();
+                    renderExercises();
+                });
+            });
 
-            btnHeaderPrimary.setText("✓ Concluído");
-            btnHeaderPrimary.setEnabled(false);
-            btnHeaderPrimary.setAlpha(0.85f);
+            btnHeaderPrimary.setText("✓ Concluído · ↺ Refazer");
+            btnHeaderPrimary.setEnabled(true);
+            btnHeaderPrimary.setAlpha(0.95f);
+            btnHeaderPrimary.setOnClickListener(v -> redoTopic());
         }
 
         updateVisibilityByPhase();
     }
 
+    private void completeCurrentTopic() {
+        if (currentTopic == null) return;
+        repo.markTopicCompleted(userId, currentTopic.id);
+        currentProgress = repo.getTopicProgress(userId, currentTopic.id);
+        setupTopicSpinner(currentTopic.id);
+        refreshPhaseState();
+        renderExercises();
+        Toast.makeText(requireContext(), "Tópico concluído! +30 pontos + bônus de acertos.",
+                Toast.LENGTH_SHORT).show();
+    }
+
     private void updateVisibilityByPhase() {
+        int ink = getColorRes(R.color.ink);
+        int muted = getColorRes(R.color.muted);
+
         if ("aula".equals(currentPhase)) {
+            // Fase Aula: player de vídeo + editor de anotações (sem exercícios misturados)
             sidePanelToggleBar.setVisibility(View.GONE);
             videoSection.setVisibility(View.VISIBLE);
             notesSection.setVisibility(View.VISIBLE);
-            aulaBottomBanner.setVisibility(View.VISIBLE);
+            aulaBottomBanner.setVisibility(currentProgress != null && currentProgress.completed ? View.GONE : View.VISIBLE);
             exercisesSection.setVisibility(View.GONE);
         } else {
+            // Fase Exercícios / Diagnóstico: separada do player de vídeo, mas com Anotações acessíveis
+            videoSection.setVisibility(View.GONE);
             sidePanelToggleBar.setVisibility(View.VISIBLE);
             aulaBottomBanner.setVisibility(View.GONE);
 
-            tabShowExercises.setBackgroundResource("questoes".equals(activeSubTab) ? R.drawable.bg_card : 0);
-            tabShowNotes.setBackgroundResource("notas".equals(activeSubTab) ? R.drawable.bg_card : 0);
-            tabShowVideo.setBackgroundResource("video".equals(activeSubTab) ? R.drawable.bg_card : 0);
+            boolean showQ = "questoes".equals(activeSubTab);
+            tabShowExercises.setBackgroundResource(showQ ? R.drawable.bg_card : 0);
+            tabShowExercises.setTextColor(showQ ? ink : muted);
+            tabShowNotes.setBackgroundResource(!showQ ? R.drawable.bg_card : 0);
+            tabShowNotes.setTextColor(!showQ ? ink : muted);
 
-            exercisesSection.setVisibility("questoes".equals(activeSubTab) ? View.VISIBLE : View.GONE);
-            notesSection.setVisibility("notas".equals(activeSubTab) ? View.VISIBLE : View.GONE);
-            videoSection.setVisibility("video".equals(activeSubTab) ? View.VISIBLE : View.GONE);
+            exercisesSection.setVisibility(showQ ? View.VISIBLE : View.GONE);
+            notesSection.setVisibility(!showQ ? View.VISIBLE : View.GONE);
         }
     }
 
-    // --- VIDEO PLAYER LOGIC ---
-    private void renderVideoPlayer() {
-        String rawUrl = store.getState().videos.getOrDefault(currentTopic.id, "");
-        edtVideoUrl.setText(rawUrl);
-        txtVideoError.setVisibility(View.GONE);
-        txtVideoEmptyHint.setText("Cole abaixo o link de um vídeo do YouTube, Vimeo ou Dailymotion sobre “" + currentTopic.title + "”.");
+    // --- VIDEO PLAYER (YouTube default_video_url ou custom_video_url) ---
+    private void renderVideoPlayer(boolean reloadWebView) {
+        if (currentTopic == null || currentProgress == null) return;
 
-        VideoEmbedHelper.Embed embed = VideoEmbedHelper.toEmbed(rawUrl);
-        if (embed != null && !isEditingVideo) {
+        boolean hasCustom = currentProgress.customVideoUrl != null
+                && !currentProgress.customVideoUrl.trim().isEmpty();
+        String effectiveUrl = hasCustom ? currentProgress.customVideoUrl : currentTopic.defaultVideoUrl;
+
+        edtVideoUrl.setText(effectiveUrl);
+        txtVideoError.setVisibility(View.GONE);
+        txtVideoEmptyHint.setText("Cole o link do YouTube para a aula de “" + currentTopic.title + "”.");
+        btnRestoreDefaultVideo.setVisibility(hasCustom ? View.VISIBLE : View.GONE);
+
+        VideoEmbedHelper.Embed embed = VideoEmbedHelper.toEmbed(effectiveUrl);
+        if (embed != null) {
             videoEmptyState.setVisibility(View.GONE);
             webViewVideo.setVisibility(View.VISIBLE);
             videoControlBar.setVisibility(View.VISIBLE);
-            videoFormBar.setVisibility(View.GONE);
-            txtVideoProvider.setText("Reproduzindo via " + embed.provider);
-            webViewVideo.loadUrl(embed.src);
+            videoFormBar.setVisibility(isEditingVideo ? View.VISIBLE : View.GONE);
+            txtVideoProvider.setText((hasCustom ? "Link personalizado" : "Aula sugerida") + " · " + embed.provider);
+
+            if (reloadWebView || !embed.src.equals(lastLoadedVideoSrc)) {
+                lastLoadedVideoSrc = embed.src;
+                String html = VideoEmbedHelper.buildIframeHtml(embed);
+                webViewVideo.loadDataWithBaseURL(
+                        "https://www.youtube-nocookie.com", html, "text/html", "UTF-8", null);
+            }
         } else {
             webViewVideo.setVisibility(View.GONE);
             videoControlBar.setVisibility(View.GONE);
-            videoEmptyState.setVisibility(embed == null ? View.VISIBLE : View.GONE);
+            videoEmptyState.setVisibility(View.VISIBLE);
             videoFormBar.setVisibility(View.VISIBLE);
         }
     }
 
     private void submitVideoUrl() {
+        if (currentTopic == null) return;
         String draft = edtVideoUrl.getText().toString().trim();
         if (draft.isEmpty()) return;
+
         VideoEmbedHelper.Embed embed = VideoEmbedHelper.toEmbed(draft);
         if (embed == null) {
-            txtVideoError.setText("Link não reconhecido. Use um link do YouTube, Vimeo ou Dailymotion.");
+            txtVideoError.setText("Link inválido. Informe uma URL válida do YouTube (youtube.com ou youtu.be).");
             txtVideoError.setVisibility(View.VISIBLE);
             return;
         }
-        store.getState().videos.put(currentTopic.id, draft);
-        store.save();
+        repo.saveCustomVideoUrl(userId, currentTopic.id, draft);
+        currentProgress.customVideoUrl = draft;
         isEditingVideo = false;
-        renderVideoPlayer();
+        lastLoadedVideoSrc = null;
+        renderVideoPlayer(true);
+        Toast.makeText(requireContext(), "Link da videoaula salvo!", Toast.LENGTH_SHORT).show();
     }
 
-    // --- NOTES EDITOR LOGIC ---
+    // --- EDITOR DE ANOTAÇÕES (SQLite em tempo real) ---
     private void setupNotesToolbar(View v) {
         edtNotes.addTextChangedListener(new TextWatcher() {
             @Override public void beforeTextChanged(CharSequence s, int start, int count, int after) {}
-            @Override public void onTextChanged(CharSequence s, int start, int before, int count) {
+
+            @Override
+            public void onTextChanged(CharSequence s, int start, int before, int count) {
                 if (suppressNotesWatcher || currentTopic == null) return;
                 String text = s.toString();
-                store.getState().notes.put(currentTopic.id, text);
-                store.save();
+                currentProgress.notes = text;
+                repo.saveTopicNotes(userId, currentTopic.id, text);
                 updateWordCount(text);
                 String time = new SimpleDateFormat("HH:mm", Locale.getDefault()).format(new Date());
                 txtSavedStatus.setText("✓ Salvo às " + time);
             }
+
             @Override public void afterTextChanged(Editable s) {}
         });
 
-        v.findViewById(R.id.btnFmtBold).setOnClickListener(view -> applySpan(new StyleSpan(Typeface.BOLD)));
-        v.findViewById(R.id.btnFmtItalic).setOnClickListener(view -> applySpan(new StyleSpan(Typeface.ITALIC)));
-        v.findViewById(R.id.btnFmtUnderline).setOnClickListener(view -> applySpan(new UnderlineSpan()));
         v.findViewById(R.id.btnFmtH2).setOnClickListener(view -> insertPrefix("\n## "));
         v.findViewById(R.id.btnFmtBullet).setOnClickListener(view -> insertPrefix("\n• "));
         v.findViewById(R.id.btnFmtQuote).setOnClickListener(view -> insertPrefix("\n❝ "));
-        v.findViewById(R.id.btnFmtClear).setOnClickListener(view -> {
-            Editable e = edtNotes.getText();
-            Object[] spans = e.getSpans(0, e.length(), Object.class);
-            for (Object span : spans) {
-                if (span instanceof StyleSpan || span instanceof UnderlineSpan) {
-                    e.removeSpan(span);
-                }
-            }
-        });
-    }
-
-    private void applySpan(Object span) {
-        int start = edtNotes.getSelectionStart();
-        int end = edtNotes.getSelectionEnd();
-        if (start < end) {
-            edtNotes.getText().setSpan(span, start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        }
+        v.findViewById(R.id.btnFmtClear).setOnClickListener(view -> edtNotes.setText(""));
     }
 
     private void insertPrefix(String prefix) {
@@ -416,60 +627,38 @@ public class StudyRoomFragment extends Fragment {
     }
 
     private void updateWordCount(String text) {
-        String trimmed = text.trim();
+        String trimmed = text != null ? text.trim() : "";
         int words = trimmed.isEmpty() ? 0 : trimmed.split("\\s+").length;
         txtWordCount.setText(words + (words == 1 ? " palavra" : " palavras"));
     }
 
-    // --- EXERCISES & DIAGNOSIS LOGIC (Exercises.tsx) ---
+    // --- EXERCÍCIOS E DIAGNÓSTICO ---
     private void renderExercises() {
         exercisesSection.removeAllViews();
-        boolean review = "diagnostico".equals(currentPhase);
-        List<Question> questions = currentTopic.questions;
-        int total = questions.size();
+        if (currentTopic == null) return;
 
-        if (total == 0) {
-            LinearLayout emptyCard = new LinearLayout(requireContext());
-            emptyCard.setOrientation(LinearLayout.VERTICAL);
-            emptyCard.setPadding(48, 48, 48, 48);
-            emptyCard.setBackgroundResource(R.drawable.bg_card);
+        boolean review = currentProgress != null && currentProgress.completed;
+        int total = currentQuestions.size();
+        Map<String, Integer> answers = repo.getAnswersForTopic(userId, currentTopic.id);
 
-            TextView t1 = new TextView(requireContext());
-            t1.setText(review ? "Sem exercícios para diagnóstico" : "Exercícios em construção");
-            t1.setTextSize(17f);
-            t1.setTypeface(null, Typeface.BOLD);
-            t1.setTextColor(getResources().getColor(R.color.ink, requireContext().getTheme()));
-
-            TextView t2 = new TextView(requireContext());
-            t2.setText(review
-                    ? "Este tópico ainda não tem banco de questões neste protótipo."
-                    : "O banco de questões deste tópico ainda não está disponível neste protótipo. Revise suas anotações e conclua o tópico.");
-            t2.setTextColor(getResources().getColor(R.color.muted, requireContext().getTheme()));
-            t2.setPadding(0, 8, 0, 0);
-
-            emptyCard.addView(t1);
-            emptyCard.addView(t2);
-            exercisesSection.addView(emptyCard);
-            return;
-        }
-
-        int answered = 0, correct = 0;
-        for (Question q : questions) {
-            Integer chosen = store.getState().answers.get(q.id);
+        int answered = 0;
+        int correct = 0;
+        for (Question q : currentQuestions) {
+            Integer chosen = answers.get(q.id);
             if (chosen != null) {
                 answered++;
-                if (chosen == q.answer) correct++;
+                if (chosen == q.correctIndex) correct++;
             }
         }
-        int pct = Math.round((correct * 100f) / total);
+        int pct = total > 0 ? Math.round((correct * 100f) / total) : 0;
 
-        // Banner superior (Resumo de Diagnóstico ou Barra de Progresso de Fixação)
+        // Banner superior
         LinearLayout topBanner = new LinearLayout(requireContext());
         topBanner.setOrientation(LinearLayout.VERTICAL);
-        topBanner.setPadding(40, 32, 40, 32);
+        topBanner.setPadding(dp(18), dp(14), dp(18), dp(14));
         LinearLayout.LayoutParams blp = new LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-        blp.setMargins(0, 0, 0, 24);
+        blp.setMargins(0, 0, 0, dp(12));
         topBanner.setLayoutParams(blp);
         topBanner.setBackgroundResource(R.drawable.bg_card_dark);
 
@@ -477,14 +666,16 @@ public class StudyRoomFragment extends Fragment {
             String diagLabel = pct == 100 ? "Gabaritou!" : (pct >= 60 ? "Bom resultado" : "Vale revisar a aula");
             TextView tvDiag = new TextView(requireContext());
             tvDiag.setText("DIAGNÓSTICO · " + pct + "% (" + diagLabel + ")");
-            tvDiag.setTextColor(getResources().getColor(R.color.lime, requireContext().getTheme()));
+            tvDiag.setTextColor(getColorRes(R.color.lime));
             tvDiag.setTextSize(15f);
             tvDiag.setTypeface(null, Typeface.BOLD);
 
             TextView tvStats = new TextView(requireContext());
-            tvStats.setText("✓ " + correct + " certas (+" + (correct * 10) + " pts)   ·   ✕ " + (total - correct) + " erradas");
+            tvStats.setText("✓ " + correct + " certas (+" + (correct * 10) + " pts)  ·  ✕ "
+                    + (total - correct) + " erradas  ·  +30 pts conclusão");
             tvStats.setTextColor(Color.WHITE);
-            tvStats.setPadding(0, 8, 0, 0);
+            tvStats.setTextSize(12f);
+            tvStats.setPadding(0, dp(4), 0, 0);
 
             topBanner.addView(tvDiag);
             topBanner.addView(tvStats);
@@ -497,18 +688,18 @@ public class StudyRoomFragment extends Fragment {
         }
         exercisesSection.addView(topBanner);
 
-        // Lista de Questões
-        for (int qi = 0; qi < questions.size(); qi++) {
-            Question q = questions.get(qi);
-            Integer chosen = store.getState().answers.get(q.id);
-            boolean ok = chosen != null && chosen == q.answer;
+        // Lista de questões
+        for (int qi = 0; qi < currentQuestions.size(); qi++) {
+            Question q = currentQuestions.get(qi);
+            Integer chosen = answers.get(q.id);
+            boolean ok = chosen != null && chosen == q.correctIndex;
 
             LinearLayout qCard = new LinearLayout(requireContext());
             qCard.setOrientation(LinearLayout.VERTICAL);
-            qCard.setPadding(40, 36, 40, 36);
+            qCard.setPadding(dp(18), dp(16), dp(18), dp(16));
             LinearLayout.LayoutParams qlp = new LinearLayout.LayoutParams(
                     LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-            qlp.setMargins(0, 0, 0, 24);
+            qlp.setMargins(0, 0, 0, dp(12));
             qCard.setLayoutParams(qlp);
             qCard.setBackgroundResource(R.drawable.bg_card);
 
@@ -517,20 +708,20 @@ public class StudyRoomFragment extends Fragment {
             tvPrompt.setText(prefix + q.prompt);
             tvPrompt.setTextSize(15f);
             tvPrompt.setTypeface(null, Typeface.BOLD);
-            tvPrompt.setTextColor(getResources().getColor(R.color.ink, requireContext().getTheme()));
+            tvPrompt.setTextColor(getColorRes(R.color.ink));
             qCard.addView(tvPrompt);
 
             for (int i = 0; i < q.options.size(); i++) {
                 final int optIdx = i;
-                boolean isAnswer = i == q.answer;
+                boolean isAnswer = i == q.correctIndex;
                 boolean isChosen = chosen != null && i == chosen;
 
                 TextView btnOpt = new TextView(requireContext());
                 LinearLayout.LayoutParams olp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                olp.setMargins(0, 14, 0, 0);
+                olp.setMargins(0, dp(8), 0, 0);
                 btnOpt.setLayoutParams(olp);
-                btnOpt.setPadding(32, 24, 32, 24);
+                btnOpt.setPadding(dp(14), dp(11), dp(14), dp(11));
 
                 String suffix = "";
                 if (review) {
@@ -543,14 +734,14 @@ public class StudyRoomFragment extends Fragment {
                 if (review) {
                     if (isAnswer) {
                         btnOpt.setBackgroundResource(R.drawable.bg_pill_success);
-                        btnOpt.setTextColor(getResources().getColor(R.color.success_dark, requireContext().getTheme()));
+                        btnOpt.setTextColor(getColorRes(R.color.success_dark));
                         btnOpt.setTypeface(null, Typeface.BOLD);
                     } else if (isChosen) {
                         btnOpt.setBackgroundResource(R.drawable.bg_button_accent);
                         btnOpt.setTextColor(Color.WHITE);
                     } else {
                         btnOpt.setBackgroundResource(R.drawable.bg_input);
-                        btnOpt.setTextColor(getResources().getColor(R.color.muted, requireContext().getTheme()));
+                        btnOpt.setTextColor(getColorRes(R.color.muted));
                     }
                 } else {
                     if (isChosen) {
@@ -559,11 +750,10 @@ public class StudyRoomFragment extends Fragment {
                         btnOpt.setTypeface(null, Typeface.BOLD);
                     } else {
                         btnOpt.setBackgroundResource(R.drawable.bg_input);
-                        btnOpt.setTextColor(getResources().getColor(R.color.ink, requireContext().getTheme()));
+                        btnOpt.setTextColor(getColorRes(R.color.ink));
                     }
                     btnOpt.setOnClickListener(v -> {
-                        store.getState().answers.put(q.id, optIdx);
-                        store.save();
+                        repo.saveQuestionAnswer(userId, q.id, optIdx);
                         refreshPhaseState();
                         renderExercises();
                     });
@@ -575,38 +765,41 @@ public class StudyRoomFragment extends Fragment {
                 TextView tvExp = new TextView(requireContext());
                 LinearLayout.LayoutParams elp = new LinearLayout.LayoutParams(
                         LinearLayout.LayoutParams.MATCH_PARENT, LinearLayout.LayoutParams.WRAP_CONTENT);
-                elp.setMargins(0, 20, 0, 0);
+                elp.setMargins(0, dp(10), 0, 0);
                 tvExp.setLayoutParams(elp);
-                tvExp.setPadding(28, 22, 28, 22);
+                tvExp.setPadding(dp(12), dp(10), dp(12), dp(10));
                 tvExp.setBackgroundResource(R.drawable.bg_input);
-                tvExp.setText("💡 Justificativa · alternativa " + LETTERS[q.answer] + ". " + q.explanation);
+                tvExp.setText("💡 Justificativa · alternativa " + LETTERS[q.correctIndex] + ". " + q.explanation);
                 tvExp.setTextSize(13f);
-                tvExp.setTextColor(getResources().getColor(R.color.ink, requireContext().getTheme()));
+                tvExp.setTextColor(getColorRes(R.color.ink));
                 qCard.addView(tvExp);
             }
 
             exercisesSection.addView(qCard);
         }
 
-        // Barra inferior de conclusão (FinishBar)
+        // Botão inferior de conclusão
         if (!review) {
-            boolean all = answered == total;
-            Button btnFinishBottom = new Button(requireContext());
+            boolean all = !currentQuestions.isEmpty() && answered == total;
+            MaterialButton btnFinishBottom = new MaterialButton(requireContext());
             btnFinishBottom.setText(all
                     ? "✓ Tudo respondido! Marcar tópico como concluído"
                     : answered + " de " + total + " respondidas (responda todas para concluir)");
+            btnFinishBottom.setAllCaps(false);
             btnFinishBottom.setEnabled(all);
             btnFinishBottom.setAlpha(all ? 1f : 0.4f);
-            btnFinishBottom.setBackgroundTintList(android.content.res.ColorStateList.valueOf(
-                    getResources().getColor(R.color.ink, requireContext().getTheme())));
+            btnFinishBottom.setBackgroundTintList(ColorStateList.valueOf(getColorRes(R.color.ink)));
             btnFinishBottom.setTextColor(Color.WHITE);
-            btnFinishBottom.setOnClickListener(v -> {
-                store.toggleCompleted(currentTopic.id);
-                setupTopicSpinner();
-                refreshPhaseState();
-                renderExercises();
-            });
+            btnFinishBottom.setOnClickListener(v -> completeCurrentTopic());
             exercisesSection.addView(btnFinishBottom);
         }
+    }
+
+    private int getColorRes(int res) {
+        return getResources().getColor(res, requireContext().getTheme());
+    }
+
+    private int dp(int value) {
+        return Math.round(value * getResources().getDisplayMetrics().density);
     }
 }
